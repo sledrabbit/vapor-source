@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "vapor-source",
+    name: "vapor-server",
     platforms: [
         .macOS(.v10_15)
     ],
@@ -18,7 +18,7 @@ let package = Package(
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .executableTarget(
-            name: "vapor-source",
+            name: "vapor-server",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIVapor", package: "swift-openapi-vapor"),
