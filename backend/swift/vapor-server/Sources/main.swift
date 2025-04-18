@@ -29,4 +29,9 @@ let handler: JobServiceAPIImpl = JobServiceAPIImpl()
 // call generated fucntion on your impl to add its request handlers to app
 try handler.registerHandlers(on: transport, serverURL: Servers.Server1.url())
 
+// Add Vapor middleware to serve the contents of the Public/ directory.
+app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
+
+app.get("openapi") { $0.redirect(to: "/openapi.html", redirectType: .permanent) }
+
 try await app.execute()
