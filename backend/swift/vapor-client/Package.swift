@@ -6,12 +6,13 @@ import PackageDescription
 let package = Package(
     name: "vapor-client",
     platforms: [
-        .macOS(.v10_15)
+        .macOS(.v13)
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.6.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.7.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.0.0"),
+        .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.6.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -21,6 +22,7 @@ let package = Package(
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                "SwiftSoup",
             ],
             plugins: [
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
