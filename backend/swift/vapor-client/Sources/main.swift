@@ -1,6 +1,7 @@
 import Foundation
 import OpenAPIRuntime
 import OpenAPIURLSession
+import SwiftDotenv
 import SwiftSoup
 
 let startTime = Date()
@@ -11,10 +12,29 @@ print("Job scraping completed successfully in \(String(format: "%.2f", execution
 func scrapeJobs() async {
   let testConfig = Config()
   let scraper = Scraper(config: testConfig)
-  let query = "software engineer"
+
+  do {
+    try Dotenv.configure()
+  } catch {
+    print("Unable to configure Dotenv.")
+    return
+  }
+
+  let query = Dotenv["QUERY"]?.stringValue ?? ""
+  let promptPath = Dotenv["LLM_PROMPT_PATH"]?.stringValue ?? ""
 
   print("Starting job scraping...")
   let jobs = scraper.scrapeJobs(query: query, config: testConfig)
+
+  if !promptPath.isEmpty {
+    do {
+      let promptContent = try String(contentsOfFile: promptPath, encoding: .utf8)
+      let parser = try Parser(jobStream: jobs, prompt: promptContent)
+      await parser.parseJob(stream: jobs)
+    } catch {
+      print("Error with AI parsing: \(error)")
+    }
+  }
 
   var count = 0
   for await job in jobs {
