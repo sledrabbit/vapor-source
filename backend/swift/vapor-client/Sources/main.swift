@@ -4,33 +4,28 @@ import OpenAPIURLSession
 import SwiftSoup
 
 let startTime = Date()
+
 Task {
-  do {
-    try await scrapeJobs()
-    let executionTime = Date().timeIntervalSince(startTime)
-    print("Job scraping completed successfully in \(String(format: "%.2f", executionTime)) seconds")
-    exit(0)
-  } catch {
-    let executionTime = Date().timeIntervalSince(startTime)
-    print(
-      "Error during job scraping after \(String(format: "%.2f", executionTime)) seconds: \(error)")
-    exit(1)
-  }
+  await scrapeJobs()
+  let executionTime = Date().timeIntervalSince(startTime)
+  print("Job scraping completed successfully in \(String(format: "%.2f", executionTime)) seconds")
+  exit(0)
 }
+
 RunLoop.main.run()
 
-func scrapeJobs() async throws {
+func scrapeJobs() async {
   let testConfig = Config()
   let scraper = Scraper(config: testConfig)
   let query = "software engineer"
 
   print("Starting job scraping...")
+  let jobs = scraper.scrapeJobs(query: query, config: testConfig)
 
-  let jobs = try await scraper.scrapeJobs(query: query, config: testConfig)
-
-  print("Found \(jobs.count) jobs:")
-  for (index, job) in jobs.enumerated() {
-    print("\n--- Job \(index + 1) ---")
+  var count = 0
+  for await job in jobs {
+    count += 1
+    print("\n--- Job \(count) ---")
     print("ID: \(job.jobId)")
     print("Title: \(job.title)")
     print("Company: \(job.company)")

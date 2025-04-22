@@ -103,8 +103,13 @@ struct Scraper {
   }
 
   private func scrapeJobsFromPage(
-    pageNum: Int, maxPages: Int, query: String, config: Config, jobIds: inout Set<String>
-  ) async throws -> [Job] {
+    pageNum: Int,
+    maxPages: Int,
+    query: String,
+    config: Config,
+    jobIds: inout Set<String>,
+    continuation: AsyncStream<Job>.Continuation
+  ) async throws {
     print("Scraping page \(pageNum) of \(maxPages)...")
 
     let url = buildUrl(query: query, page: String(pageNum), baseUrl: config.baseUrl)
@@ -113,15 +118,15 @@ struct Scraper {
 
     print("Found \(jobLinks.count) job links on page \(pageNum)")
 
-    return try await processJobLinks(jobLinks: jobLinks, jobIds: &jobIds)
+    await processJobLinks(jobLinks: jobLinks, jobIds: &jobIds, continuation: continuation)
   }
 
-  private func processJobLinks(jobLinks: [(url: String, jobId: String)], jobIds: inout Set<String>)
-    async throws -> [Job]
-  {
-    try await withThrowingTaskGroup(of: Job?.self) { group -> [Job] in
-      var newJobs: [Job] = []
-
+  private func processJobLinks(
+    jobLinks: [(url: String, jobId: String)],
+    jobIds: inout Set<String>,
+    continuation: AsyncStream<Job>.Continuation
+  ) async {
+    await withTaskGroup(of: Job?.self) { group -> Void in
       for (jobUrl, jobId) in jobLinks where !jobIds.contains(jobId) {
         jobIds.insert(jobId)
 
@@ -138,50 +143,48 @@ struct Scraper {
         }
       }
 
-      for try await job in group {
+      for await job in group {
         if let job = job {
-          newJobs.append(job)
+          continuation.yield(job)
           print("Completed processing job: \(job.title)")
         }
       }
-
-      return newJobs
     }
   }
 
-  func scrapeJobs(query: String, config: Config) async throws -> [Job] {
-    var allJobs: [Job] = []
-    var jobIds = Set<String>()
+  func scrapeJobs(query: String, config: Config) -> AsyncStream<Job> {
+    return AsyncStream { continuation in
+      Task {
+        do {
+          var jobIds = Set<String>()
 
-    print(
-      "Starting job scraping with max pages set to \(config.maxPages) (maximum \(config.maxJobs) jobs)"
-    )
+          print(
+            "Starting job scraping with max pages set to \(config.maxPages) (maximum \(config.maxJobs) jobs)"
+          )
 
-    for pageNum in 1...config.maxPages {
-      let newJobs = try await scrapeJobsFromPage(
-        pageNum: pageNum,
-        maxPages: config.maxPages,
-        query: query,
-        config: config,
-        jobIds: &jobIds
-      )
+          for pageNum in 1...config.maxPages {
+            do {
+              try await scrapeJobsFromPage(
+                pageNum: pageNum,
+                maxPages: config.maxPages,
+                query: query,
+                config: config,
+                jobIds: &jobIds,
+                continuation: continuation
+              )
+              print("Completed page \(pageNum)")
+            } catch {
+              print("Error scraping page \(pageNum): \(error). Continuing to next page.")
+            }
 
-      if newJobs.isEmpty && pageNum > 1 {
-        print("No more jobs found on page \(pageNum). Stopping.")
-        break
-      }
-
-      allJobs.append(contentsOf: newJobs)
-      print(
-        "Completed page \(pageNum): Added \(newJobs.count) new jobs, \(allJobs.count) total jobs scraped"
-      )
-
-      if pageNum == config.maxPages {
-        print("Reached maximum page limit (\(config.maxPages)). Stopping.")
+            if pageNum == config.maxPages {
+              print("Reached maximum page limit (\(config.maxPages)). Stopping.")
+            }
+          }
+          print("Scraping complete.")
+          continuation.finish()
+        }
       }
     }
-
-    print("Scraping complete. Total unique jobs found: \(allJobs.count)")
-    return allJobs
   }
 }
