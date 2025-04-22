@@ -102,6 +102,53 @@ struct Scraper {
     )
   }
 
+  private func scrapeJobsFromPage(
+    pageNum: Int, maxPages: Int, query: String, config: Config, jobIds: inout Set<String>
+  ) async throws -> [Job] {
+    print("Scraping page \(pageNum) of \(maxPages)...")
+
+    let url = buildUrl(query: query, page: String(pageNum), baseUrl: config.baseUrl)
+    let htmlString = try await fetchPage(url: url)
+    let jobLinks = try extractJobLinks(from: htmlString, baseUrl: config.baseUrl)
+
+    print("Found \(jobLinks.count) job links on page \(pageNum)")
+
+    return try await processJobLinks(jobLinks: jobLinks, jobIds: &jobIds)
+  }
+
+  private func processJobLinks(jobLinks: [(url: String, jobId: String)], jobIds: inout Set<String>)
+    async throws -> [Job]
+  {
+    try await withThrowingTaskGroup(of: Job?.self) { group -> [Job] in
+      var newJobs: [Job] = []
+
+      for (jobUrl, jobId) in jobLinks where !jobIds.contains(jobId) {
+        jobIds.insert(jobId)
+
+        group.addTask { [self] in
+          do {
+            print("Processing job ID: \(jobId)")
+            let jobHtml = try await self.fetchPage(url: jobUrl)
+            let job = try self.parseJobDetails(from: jobHtml, url: jobUrl, jobId: jobId)
+            return job
+          } catch {
+            print("Error processing job \(jobId): \(error)")
+            return nil
+          }
+        }
+      }
+
+      for try await job in group {
+        if let job = job {
+          newJobs.append(job)
+          print("Completed processing job: \(job.title)")
+        }
+      }
+
+      return newJobs
+    }
+  }
+
   func scrapeJobs(query: String, config: Config) async throws -> [Job] {
     var allJobs: [Job] = []
     var jobIds = Set<String>()
@@ -111,35 +158,22 @@ struct Scraper {
     )
 
     for pageNum in 1...config.maxPages {
-      print("Scraping page \(pageNum) of \(config.maxPages)...")
+      let newJobs = try await scrapeJobsFromPage(
+        pageNum: pageNum,
+        maxPages: config.maxPages,
+        query: query,
+        config: config,
+        jobIds: &jobIds
+      )
 
-      let url = buildUrl(query: query, page: String(pageNum), baseUrl: config.baseUrl)
-      let htmlString = try await fetchPage(url: url)
-      let jobLinks = try extractJobLinks(from: htmlString, baseUrl: config.baseUrl)
-
-      print("Found \(jobLinks.count) job links on page \(pageNum)")
-
-      if jobLinks.isEmpty {
+      if newJobs.isEmpty && pageNum > 1 {
         print("No more jobs found on page \(pageNum). Stopping.")
         break
       }
 
-      var newJobsOnThisPage = 0
-      for (_, (jobUrl, jobId)) in jobLinks.enumerated() {
-        if !jobIds.contains(jobId) {
-          print("Processing job \(allJobs.count + 1)/\(config.maxJobs) (ID: \(jobId))")
-          let jobHtml = try await fetchPage(url: jobUrl)
-          let job = try parseJobDetails(from: jobHtml, url: jobUrl, jobId: jobId)
-          allJobs.append(job)
-          jobIds.insert(jobId)
-          newJobsOnThisPage += 1
-        } else {
-          print("Skipping duplicate job with ID: \(jobId)")
-        }
-      }
-
+      allJobs.append(contentsOf: newJobs)
       print(
-        "Completed page \(pageNum): Added \(newJobsOnThisPage) new jobs, \(allJobs.count) total jobs scraped"
+        "Completed page \(pageNum): Added \(newJobs.count) new jobs, \(allJobs.count) total jobs scraped"
       )
 
       if pageNum == config.maxPages {
