@@ -4,15 +4,9 @@ import OpenAPIURLSession
 import SwiftSoup
 
 let startTime = Date()
-
-Task {
-  await scrapeJobs()
-  let executionTime = Date().timeIntervalSince(startTime)
-  print("Job scraping completed successfully in \(String(format: "%.2f", executionTime)) seconds")
-  exit(0)
-}
-
-RunLoop.main.run()
+await scrapeJobs()
+let executionTime = Date().timeIntervalSince(startTime)
+print("Job scraping completed successfully in \(String(format: "%.2f", executionTime)) seconds")
 
 func scrapeJobs() async {
   let testConfig = Config()
