@@ -63,3 +63,31 @@ struct Constants {
     "Unspecified",
   ]
 }
+
+extension Job {
+  func toAPIModel() -> Components.Schemas.Job {
+    return Components.Schemas.Job(
+      jobId: self.jobId,
+      title: self.title,
+      company: self.company,
+      location: self.location,
+      modality: self.modality.flatMap { Components.Schemas.Job.ModalityPayload(rawValue: $0) },
+      postedDate: self.postedDate,
+      expiresDate: self.expiresDate,
+      salary: self.salary,
+      url: self.url,
+      minYearsExperience: self.minYearsExperience,
+      minDegree: self.minDegree.flatMap { Components.Schemas.Job.MinDegreePayload(rawValue: $0) },
+      domain: self.domain.flatMap { Components.Schemas.Job.DomainPayload(rawValue: $0) },
+      description: self.description,
+      parsedDescription: self.parsedDescription,
+      s3Pointer: self.s3Pointer,
+      languages: self.languages?.map { lang in
+        Components.Schemas.Language(id: lang.id.flatMap { Int($0) }, name: lang.name)
+      },
+      technologies: self.technologies?.map { tech in
+        Components.Schemas.Technology(id: tech.id.flatMap { Int($0) }, name: tech.name)
+      }
+    )
+  }
+}
