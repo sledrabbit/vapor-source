@@ -30,23 +30,23 @@ func scrapeJobs() async {
     do {
       let promptContent = try String(contentsOfFile: promptPath, encoding: .utf8)
       let parser = try Parser(jobStream: jobs, prompt: promptContent)
-      await parser.parseJob(stream: jobs)
+      let processedJobs = await parser.parseJobs()
+
+      var count = 0
+      for job in processedJobs {
+        count += 1
+        print("\n--- Job \(count) ---")
+        print("ID: \(job.jobId)")
+        print("Title: \(job.title)")
+        print("Company: \(job.company)")
+        print("Location: \(job.location)")
+        print("Posted: \(job.postedDate)")
+        print("Salary: \(job.salary)")
+        print("URL: \(job.url)")
+      }
     } catch {
       print("Error with AI parsing: \(error)")
     }
-  }
-
-  var count = 0
-  for await job in jobs {
-    count += 1
-    print("\n--- Job \(count) ---")
-    print("ID: \(job.jobId)")
-    print("Title: \(job.title)")
-    print("Company: \(job.company)")
-    print("Location: \(job.location)")
-    print("Posted: \(job.postedDate)")
-    print("Salary: \(job.salary)")
-    print("URL: \(job.url)")
   }
 }
 
