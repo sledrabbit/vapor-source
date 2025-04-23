@@ -28,7 +28,7 @@ struct Scraper {
     let trimQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
       .replacingOccurrences(of: " ", with: "+")
     return
-      "\(baseUrl)jobsearch/powersearch.aspx?q=\(trimQuery)&rad_units=miles&pp=25&nosal=true&vw=b&setype=2&pg=\(page)&re=3"
+      "\(baseUrl)jobsearch/PowerSearch.aspx?jt=2&q=\(trimQuery)&where=Washington&rad=30&nosal=true&sort=rv.di.dt&pp=25&rad_units=miles&vw=b&setype=2&brd=3&brd=1&pg=\(page)&re=3"
   }
 
   private func fetchPage(url: String) async throws -> String {
