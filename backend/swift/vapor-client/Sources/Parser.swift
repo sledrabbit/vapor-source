@@ -21,26 +21,53 @@ struct Parser {
     self.messenger = OpenAIMessenger(apiKey: apiKey.stringValue)
   }
 
-  func parseJob(stream: AsyncStream<Job>) async {
-    for await job in stream {
-      let finalPrompt = "\(prompt)\n\nJob description: \(job.description)"
+  func parseJobs(maxConcurrent: Int = 25) async -> [Job] {
+    var processedJobs = [Job]()
 
-      do {
-        let response = try await messenger.sendMessage(
-          prompt: finalPrompt, content: job.description)
+    await withTaskGroup(of: Job?.self) { group in
+      var runningTasks = 0
 
-        if let content = response.content {
-          print("\n===== AI Parsing for Job: \(job.title) =====")
-          print(content)
-          print("==========================================\n")
-        } else {
-          print("Empty response received from OpenAI")
+      for await job in jobStream {
+        if runningTasks >= maxConcurrent {
+          if let completedJob = await group.next() {
+            if let job = completedJob {
+              processedJobs.append(job)
+            }
+            runningTasks -= 1
+          }
         }
 
-      } catch {
-        print("API call failure: \(error.localizedDescription)")
+        group.addTask { [self] in
+          let finalPrompt = "\(prompt)\n\nJob description: \(job.description)"
+          do {
+            let response = try await self.messenger.sendMessage(
+              prompt: finalPrompt, content: job.description)
+            if let content = response.content {
+              print("\n===== AI Parsing for Job: \(job.title) =====")
+              print("\t\t \(job.company)")
+              print(content)
+              print(job.url)
+              print("==========================================\n")
+              return job
+            } else {
+              print("Empty response received from OpenAI")
+              return nil
+            }
+          } catch {
+            print("API call failure: \(error.localizedDescription)")
+            return nil
+          }
+        }
+        runningTasks += 1
+      }
+
+      for await result in group {
+        if let job = result {
+          processedJobs.append(job)
+        }
       }
     }
+    return processedJobs
   }
 }
 
