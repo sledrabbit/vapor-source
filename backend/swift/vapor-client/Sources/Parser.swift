@@ -21,53 +21,54 @@ struct Parser {
     self.messenger = OpenAIMessenger(apiKey: apiKey.stringValue)
   }
 
-  func parseJobs(maxConcurrent: Int = 25) async -> [Job] {
-    var processedJobs = [Job]()
+  func parseJobs(maxConcurrent: Int = 25) -> AsyncStream<Job> {
+    return AsyncStream { continuation in
+      Task {
+        await withTaskGroup(of: Job?.self) { group in
+          var runningTasks = 0
 
-    await withTaskGroup(of: Job?.self) { group in
-      var runningTasks = 0
-
-      for await job in jobStream {
-        if runningTasks >= maxConcurrent {
-          if let completedJob = await group.next() {
-            if let job = completedJob {
-              processedJobs.append(job)
+          for await job in jobStream {
+            if runningTasks >= maxConcurrent {
+              if let completedJob = await group.next() {
+                if let job = completedJob {
+                  continuation.yield(job)
+                }
+                runningTasks -= 1
+              }
             }
-            runningTasks -= 1
+
+            group.addTask { [self] in
+              let finalPrompt = "\(prompt)\n\nJob description: \(job.description)"
+              do {
+                let response = try await self.messenger.sendMessage(
+                  prompt: finalPrompt, content: job.description)
+                if let content = response.content {
+                  print("\n===== AI Parsing for Job: \(job.title) =====")
+                  print("\t\t \(job.company)")
+                  print(content)
+                  print(job.url)
+                  print("==========================================\n")
+                  return job
+                } else {
+                  print("Empty response received from OpenAI")
+                  return nil
+                }
+              } catch {
+                print("API call failure: \(error.localizedDescription)")
+                return nil
+              }
+            }
+            runningTasks += 1
+          }
+          for await result in group {
+            if let job = result {
+              continuation.yield(job)
+            }
           }
         }
-
-        group.addTask { [self] in
-          let finalPrompt = "\(prompt)\n\nJob description: \(job.description)"
-          do {
-            let response = try await self.messenger.sendMessage(
-              prompt: finalPrompt, content: job.description)
-            if let content = response.content {
-              print("\n===== AI Parsing for Job: \(job.title) =====")
-              print("\t\t \(job.company)")
-              print(content)
-              print(job.url)
-              print("==========================================\n")
-              return job
-            } else {
-              print("Empty response received from OpenAI")
-              return nil
-            }
-          } catch {
-            print("API call failure: \(error.localizedDescription)")
-            return nil
-          }
-        }
-        runningTasks += 1
-      }
-
-      for await result in group {
-        if let job = result {
-          processedJobs.append(job)
-        }
+        continuation.finish()
       }
     }
-    return processedJobs
   }
 }
 
