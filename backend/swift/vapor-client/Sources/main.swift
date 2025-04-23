@@ -22,18 +22,19 @@ func scrapeJobs() async {
 
   let query = Dotenv["QUERY"]?.stringValue ?? ""
   let promptPath = Dotenv["LLM_PROMPT_PATH"]?.stringValue ?? ""
+  let testAPI = true
 
   print("Starting job scraping...")
-  let jobs = scraper.scrapeJobs(query: query, config: testConfig)
+  let jobStream = scraper.scrapeJobs(query: query, config: testConfig)
 
   if !promptPath.isEmpty {
     do {
       let promptContent = try String(contentsOfFile: promptPath, encoding: .utf8)
-      let parser = try Parser(jobStream: jobs, prompt: promptContent)
-      let processedJobs = await parser.parseJobs()
+      let parser = try Parser(jobStream: jobStream, prompt: promptContent)
+      let processedJobStream = parser.parseJobs()
 
       var count = 0
-      for job in processedJobs {
+      for await job in processedJobStream {
         count += 1
         print("\n--- Job \(count) ---")
         print("ID: \(job.jobId)")
@@ -43,31 +44,29 @@ func scrapeJobs() async {
         print("Posted: \(job.postedDate)")
         print("Salary: \(job.salary)")
         print("URL: \(job.url)")
+
+        if testAPI {
+          do {
+            try await testAPIClient(job)
+          } catch {
+            print("Error sending job to API: \(error)")
+          }
+        }
       }
+
     } catch {
       print("Error with AI parsing: \(error)")
     }
   }
 }
 
-func testAPIClient() async throws {
-  let job = Components.Schemas.Job(
-    jobId: "job-123",
-    title: "Swift Developer",
-    company: "Vapor Inc.",
-    location: "San Francisco, CA",
-    postedDate: "2023-07-15",
-    salary: "$120,000 - $150,000",
-    url: "https://example.com/jobs/swift-developer",
-    description: "We are looking for experienced Swift dev..."
-  )
-
+func testAPIClient(_ job: Job) async throws {
   let client = Client(
     serverURL: try Servers.Server2.url(),
     transport: URLSessionTransport()
   )
 
-  let response = try await client.postJobs(body: .json(job))
+  let response = try await client.postJobs(body: .json(job.toAPIModel()))
 
   switch response {
   case .created(let createdResponse):
