@@ -4,14 +4,15 @@ import OpenAPIURLSession
 import SwiftDotenv
 import SwiftSoup
 
+let debugEnabled = true
 let startTime = Date()
 await scrapeJobs()
 let executionTime = Date().timeIntervalSince(startTime)
-print("Job scraping completed successfully in \(String(format: "%.2f", executionTime)) seconds")
+debug("Job scraping completed successfully in \(String(format: "%.2f", executionTime)) seconds")
 
 func scrapeJobs() async {
   let testConfig = Config()
-  let scraper = Scraper(config: testConfig)
+  let scraper = Scraper(config: testConfig, debugEnabled: debugEnabled)
 
   do {
     try Dotenv.configure()
@@ -24,13 +25,14 @@ func scrapeJobs() async {
   let promptPath = Dotenv["LLM_PROMPT_PATH"]?.stringValue ?? ""
   let testAPI = true
 
-  print("🔍 Starting job scraping...")
+  debug("🔍 Starting job scraping...")
   let jobStream = scraper.scrapeJobs(query: query, config: testConfig)
 
   if !promptPath.isEmpty {
     do {
       let promptContent = try String(contentsOfFile: promptPath, encoding: .utf8)
-      let parser = try Parser(jobStream: jobStream, prompt: promptContent)
+      let parser = try Parser(
+        jobStream: jobStream, prompt: promptContent, debugEnabled: debugEnabled)
       let processedJobStream = parser.parseJobs()
 
       for await job in processedJobStream {
@@ -42,7 +44,6 @@ func scrapeJobs() async {
           }
         }
       }
-
     } catch {
       print("Error with AI parsing: \(error)")
     }
@@ -59,12 +60,18 @@ func testAPIClient(_ job: Job) async throws {
 
   switch response {
   case .created:
-    print("✅ Post successful: \(job.title)")
+    debug("\t📦Post successful: \(job.title)")
   case .badRequest:
     print("❌ Bad request - invalid input provided")
   case .internalServerError:
     print("🔥 Server error encountered")
   case .undocumented(let statusCode, _):
     print("⚠️ Unexpected response with status code: \(statusCode)")
+  }
+}
+
+func debug(_ message: String, isEnabled: Bool = true) {
+  if isEnabled {
+    print(message)
   }
 }

@@ -23,6 +23,12 @@ struct Config {
 
 struct Scraper {
   var config: Config
+  let debugEnabled: Bool
+
+  init(config: Config, debugEnabled: Bool = true) {
+    self.config = config
+    self.debugEnabled = debugEnabled
+  }
 
   private func buildUrl(query: String, page: String, baseUrl: String) -> String {
     let trimQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -110,13 +116,13 @@ struct Scraper {
     jobIds: inout Set<String>,
     continuation: AsyncStream<Job>.Continuation
   ) async throws {
-    print("📄 Scraping page \(pageNum) of \(maxPages)...")
+    debug("📄 Scraping page \(pageNum) of \(maxPages)...")
 
     let url = buildUrl(query: query, page: String(pageNum), baseUrl: config.baseUrl)
     let htmlString = try await fetchPage(url: url)
     let jobLinks = try extractJobLinks(from: htmlString, baseUrl: config.baseUrl)
 
-    print("🔍 Found \(jobLinks.count) job links on page \(pageNum)")
+    debug("🔍 Found \(jobLinks.count) job links on page \(pageNum)")
 
     await processJobLinks(jobLinks: jobLinks, jobIds: &jobIds, continuation: continuation)
   }
@@ -145,7 +151,7 @@ struct Scraper {
       for await job in group {
         if let job = job {
           continuation.yield(job)
-          print("📋 Scraped job: \(job.title)")
+          debug("\t📋 Scraped job: \(job.title)")
         }
       }
     }
@@ -157,7 +163,7 @@ struct Scraper {
         do {
           var jobIds = Set<String>()
 
-          print(
+          debug(
             "🚀 Starting job scraping with max pages set to \(config.maxPages) (maximum \(config.maxJobs) jobs)"
           )
 
@@ -171,7 +177,7 @@ struct Scraper {
                 jobIds: &jobIds,
                 continuation: continuation
               )
-              print("✅ Completed page \(pageNum)")
+              debug("✅ Completed page \(pageNum)")
             } catch {
               print("❌ Error scraping page \(pageNum): \(error). Continuing to next page.")
             }
