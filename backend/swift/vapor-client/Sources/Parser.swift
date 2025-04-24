@@ -3,12 +3,25 @@ import SwiftDotenv
 
 enum ParserError: Error {
   case missingAPIKey
+  case emptyResponse
+  case jsonParsingError(Error)
+  case apiError(Error)
+}
+
+struct AIParseResponse: Decodable {
+  let ParsedDescription: String
+  let MinDegree: String
+  let MinYearsExperience: Int
+  let Modality: String
+  let Domain: String
+  let Languages: [Language]
+  let Technologies: [Technology]
 }
 
 struct Parser {
   var jobStream: AsyncStream<Job>
   let prompt: String
-  private let messenger: OpenAIMessenger
+  private let messenger: OpenAIClient
 
   init(jobStream: AsyncStream<Job>, prompt: String) throws {
     self.jobStream = jobStream
@@ -18,9 +31,11 @@ struct Parser {
       throw ParserError.missingAPIKey
     }
 
-    self.messenger = OpenAIMessenger(apiKey: apiKey.stringValue)
+    self.messenger = OpenAIClient(apiKey: apiKey.stringValue)
   }
+}
 
+extension Parser {
   func parseJobs(maxConcurrent: Int = 25) -> AsyncStream<Job> {
     return AsyncStream { continuation in
       Task {
@@ -29,34 +44,14 @@ struct Parser {
 
           for await job in jobStream {
             if runningTasks >= maxConcurrent {
-              if let completedJob = await group.next() {
-                if let job = completedJob {
-                  continuation.yield(job)
-                }
-                runningTasks -= 1
+              if let completedJob = await group.next(), let job = completedJob {
+                continuation.yield(job)
               }
+              runningTasks -= 1
             }
 
-            group.addTask { [self] in
-              let finalPrompt = "\(prompt)\n\nJob description: \(job.description)"
-              do {
-                let response = try await self.messenger.sendMessage(
-                  prompt: finalPrompt, content: job.description)
-                if let content = response.content {
-                  print("\n===== AI Parsing for Job: \(job.title) =====")
-                  print("\t\t \(job.company)")
-                  print(content)
-                  print(job.url)
-                  print("==========================================\n")
-                  return job
-                } else {
-                  print("Empty response received from OpenAI")
-                  return nil
-                }
-              } catch {
-                print("API call failure: \(error.localizedDescription)")
-                return nil
-              }
+            group.addTask {
+              await processJob(job)
             }
             runningTasks += 1
           }
@@ -70,61 +65,48 @@ struct Parser {
       }
     }
   }
-}
 
-struct OpenAIMessenger {
-  private let apiKey: String
-  private let baseURL = "https://api.openai.com/v1/chat/completions"
+  private func parseAIResponse(content: String, originalJob: Job) async throws -> Job? {
+    var updatedJob = originalJob
+    let jsonData = Data(content.utf8)
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
 
-  init(apiKey: String) {
-    self.apiKey = apiKey
+    do {
+      let parsedFields: AIParseResponse = try decoder.decode(AIParseResponse.self, from: jsonData)
+
+      updatedJob.parsedDescription = parsedFields.ParsedDescription
+      updatedJob.minDegree = parsedFields.MinDegree
+      updatedJob.minYearsExperience = parsedFields.MinYearsExperience
+      updatedJob.modality = parsedFields.Modality
+      updatedJob.domain = parsedFields.Domain
+      updatedJob.languages = parsedFields.Languages
+      updatedJob.technologies = parsedFields.Technologies
+
+      print("Successfully parsed updatedJob: \(updatedJob.title)")
+      print("minYearsExperience: \(updatedJob.minYearsExperience ?? 0)")
+      return updatedJob
+    } catch {
+      print("JSON Parsing error: \(error)")
+      print("Failed to parse JSON: \(content)")
+      return nil
+    }
   }
 
-  struct ChatCompletionResponse: Decodable {
-    let choices: [Choice]
+  private func processJob(_ job: Job) async -> Job? {
+    let finalPrompt = "\(prompt)\n\nJob description: \(job.description)"
 
-    var content: String? {
-      choices.first?.message.content
+    do {
+      let response = try await messenger.sendMessage(prompt: finalPrompt, content: job.description)
+      guard let content = response.content else {
+        print("Empty response received from OpenAI")
+        return nil
+      }
+
+      return try await parseAIResponse(content: content, originalJob: job)
+    } catch {
+      print("API call failure: \(error.localizedDescription)")
+      return nil
     }
-
-    struct Choice: Decodable {
-      let message: Message
-    }
-
-    struct Message: Decodable {
-      let content: String
-    }
-  }
-
-  func sendMessage(prompt: String, content: String) async throws -> ChatCompletionResponse {
-    let fullMessage = prompt + " " + content
-
-    guard let url = URL(string: baseURL) else {
-      throw NSError(domain: "Invalid URL", code: 400)
-    }
-
-    var request = URLRequest(url: url)
-    request.httpMethod = "POST"
-    request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-    request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-
-    let requestBody: [String: Any] = [
-      "model": "gpt-4o-mini",
-      "messages": [
-        ["role": "user", "content": fullMessage]
-      ],
-    ]
-
-    let jsonData = try JSONSerialization.data(withJSONObject: requestBody)
-    request.httpBody = jsonData
-
-    let (data, response) = try await URLSession.shared.data(for: request)
-
-    guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-      throw NSError(
-        domain: "HTTP Error", code: (response as? HTTPURLResponse)?.statusCode ?? 500)
-    }
-
-    return try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
   }
 }
