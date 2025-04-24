@@ -5,6 +5,8 @@ import SwiftDotenv
 import SwiftSoup
 
 let debugEnabled = true
+let devMode = true
+
 let startTime = Date()
 await scrapeJobs()
 let executionTime = Date().timeIntervalSince(startTime)
@@ -32,7 +34,7 @@ func scrapeJobs() async {
     do {
       let promptContent = try String(contentsOfFile: promptPath, encoding: .utf8)
       let parser = try Parser(
-        jobStream: jobStream, prompt: promptContent, debugEnabled: debugEnabled)
+        jobStream: jobStream, prompt: promptContent, debugEnabled: debugEnabled, devMode: devMode)
       let processedJobStream = parser.parseJobs()
 
       for await job in processedJobStream {
