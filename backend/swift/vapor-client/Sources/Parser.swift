@@ -83,8 +83,7 @@ extension Parser {
       updatedJob.languages = parsedFields.Languages
       updatedJob.technologies = parsedFields.Technologies
 
-      print("Successfully parsed updatedJob: \(updatedJob.title)")
-      print("minYearsExperience: \(updatedJob.minYearsExperience ?? 0)")
+      // print("Successfully parsed updatedJob: \(updatedJob.title)")
       return updatedJob
     } catch {
       print("JSON Parsing error: \(error)")
@@ -97,15 +96,16 @@ extension Parser {
     let finalPrompt = "\(prompt)\n\nJob description: \(job.description)"
 
     do {
+      print("🤖 Analyzing job: \(job.title)")
       let response = try await messenger.sendMessage(prompt: finalPrompt, content: job.description)
       guard let content = response.content else {
-        print("Empty response received from OpenAI")
+        print("⚠️ Empty response received from OpenAI")
         return nil
       }
 
       return try await parseAIResponse(content: content, originalJob: job)
     } catch {
-      print("API call failure: \(error.localizedDescription)")
+      print("❌ API call failure: \(error.localizedDescription)")
       return nil
     }
   }

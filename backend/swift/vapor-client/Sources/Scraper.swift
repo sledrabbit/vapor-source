@@ -110,13 +110,13 @@ struct Scraper {
     jobIds: inout Set<String>,
     continuation: AsyncStream<Job>.Continuation
   ) async throws {
-    print("Scraping page \(pageNum) of \(maxPages)...")
+    print("📄 Scraping page \(pageNum) of \(maxPages)...")
 
     let url = buildUrl(query: query, page: String(pageNum), baseUrl: config.baseUrl)
     let htmlString = try await fetchPage(url: url)
     let jobLinks = try extractJobLinks(from: htmlString, baseUrl: config.baseUrl)
 
-    print("Found \(jobLinks.count) job links on page \(pageNum)")
+    print("🔍 Found \(jobLinks.count) job links on page \(pageNum)")
 
     await processJobLinks(jobLinks: jobLinks, jobIds: &jobIds, continuation: continuation)
   }
@@ -132,7 +132,6 @@ struct Scraper {
 
         group.addTask { [self] in
           do {
-            print("Processing job ID: \(jobId)")
             let jobHtml = try await self.fetchPage(url: jobUrl)
             let job = try self.parseJobDetails(from: jobHtml, url: jobUrl, jobId: jobId)
             return job
@@ -146,7 +145,7 @@ struct Scraper {
       for await job in group {
         if let job = job {
           continuation.yield(job)
-          print("Completed processing job: \(job.title)")
+          print("📋 Scraped job: \(job.title)")
         }
       }
     }
@@ -159,7 +158,7 @@ struct Scraper {
           var jobIds = Set<String>()
 
           print(
-            "Starting job scraping with max pages set to \(config.maxPages) (maximum \(config.maxJobs) jobs)"
+            "🚀 Starting job scraping with max pages set to \(config.maxPages) (maximum \(config.maxJobs) jobs)"
           )
 
           for pageNum in 1...config.maxPages {
@@ -172,16 +171,16 @@ struct Scraper {
                 jobIds: &jobIds,
                 continuation: continuation
               )
-              print("Completed page \(pageNum)")
+              print("✅ Completed page \(pageNum)")
             } catch {
-              print("Error scraping page \(pageNum): \(error). Continuing to next page.")
+              print("❌ Error scraping page \(pageNum): \(error). Continuing to next page.")
             }
 
             if pageNum == config.maxPages {
-              print("Reached maximum page limit (\(config.maxPages)). Stopping.")
+              print("⚠️ Reached maximum page limit (\(config.maxPages)). Stopping.")
             }
           }
-          print("Scraping complete.")
+          print("🏁 Scraping complete.")
           continuation.finish()
         }
       }

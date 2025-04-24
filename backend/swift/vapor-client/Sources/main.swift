@@ -24,7 +24,7 @@ func scrapeJobs() async {
   let promptPath = Dotenv["LLM_PROMPT_PATH"]?.stringValue ?? ""
   let testAPI = true
 
-  print("Starting job scraping...")
+  print("🔍 Starting job scraping...")
   let jobStream = scraper.scrapeJobs(query: query, config: testConfig)
 
   if !promptPath.isEmpty {
@@ -33,18 +33,7 @@ func scrapeJobs() async {
       let parser = try Parser(jobStream: jobStream, prompt: promptContent)
       let processedJobStream = parser.parseJobs()
 
-      var count = 0
       for await job in processedJobStream {
-        count += 1
-        print("\n--- Job \(count) ---")
-        print("ID: \(job.jobId)")
-        print("Title: \(job.title)")
-        print("Company: \(job.company)")
-        print("Location: \(job.location)")
-        print("Posted: \(job.postedDate)")
-        print("Salary: \(job.salary)")
-        print("URL: \(job.url)")
-
         if testAPI {
           do {
             try await testAPIClient(job)
@@ -69,19 +58,13 @@ func testAPIClient(_ job: Job) async throws {
   let response = try await client.postJobs(body: .json(job.toAPIModel()))
 
   switch response {
-  case .created(let createdResponse):
-    print("Job created successfully!")
-    switch createdResponse.body {
-    case .json(let createdJob):
-      print("Job ID: \(createdJob.jobId)")
-      print("Title: \(createdJob.title)")
-      print("Company: \(createdJob.company)")
-    }
+  case .created:
+    print("✅ Post successful: \(job.title)")
   case .badRequest:
-    print("Bad request - invalid input provided")
+    print("❌ Bad request - invalid input provided")
   case .internalServerError:
-    print("Server error encountered")
+    print("🔥 Server error encountered")
   case .undocumented(let statusCode, _):
-    print("Unexpected response with status code: \(statusCode)")
+    print("⚠️ Unexpected response with status code: \(statusCode)")
   }
 }
