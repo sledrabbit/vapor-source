@@ -41,32 +41,24 @@ struct Parser {
 }
 
 extension Parser {
-  func parseJobs(maxConcurrent: Int = 25) -> AsyncStream<Job> {
+  func parseJobs() -> AsyncStream<Job> {
     return AsyncStream { continuation in
-      Task {
-        await withTaskGroup(of: Job?.self) { group in
-          var runningTasks = 0
-
+      let processingTask = Task {
+        await withTaskGroup(of: Void.self) { group in
           for await job in jobStream {
-            if runningTasks >= maxConcurrent {
-              if let completedJob = await group.next(), let job = completedJob {
-                continuation.yield(job)
-              }
-              runningTasks -= 1
-            }
-
             group.addTask {
-              await processJob(job)
-            }
-            runningTasks += 1
-          }
-          for await result in group {
-            if let job = result {
-              continuation.yield(job)
+              let processedJob = await self.processJob(job)
+
+              if let processedJob = processedJob {
+                continuation.yield(processedJob)
+              }
             }
           }
         }
         continuation.finish()
+      }
+      continuation.onTermination = { _ in
+        processingTask.cancel()
       }
     }
   }
