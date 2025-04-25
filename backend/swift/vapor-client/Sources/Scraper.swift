@@ -1,5 +1,5 @@
 import Foundation
-import SwiftSoup
+import Kanna
 
 struct Config {
   let maxPages: Int
@@ -46,39 +46,42 @@ struct Scraper {
     return htmlString
   }
 
-  private func extractJobLinks(from htmlString: String, baseUrl: String) throws -> [(
+  private func extractJobLinks(from document: HTMLDocument, baseUrl: String) throws -> [(
     url: String, jobId: String
   )] {
-    let document = try SwiftSoup.parse(htmlString)
-    let jobElements = try document.select("h2.with-badge")
-    let base = URL(string: baseUrl)
     let jobIdRegex = /JobID=(\d+)/
+    let base = URL(string: baseUrl)
+    var results: [(url: String, jobId: String)] = []
 
-    return try jobElements.compactMap { element in
-      guard let linkElement = try element.select("a").first(),
-        let relativeUrl = try? linkElement.attr("href"),
+    for linkElement in document.css("h2.with-badge a") {
+      guard let relativeUrl = linkElement["href"],
         let url = URL(string: relativeUrl, relativeTo: base)?.absoluteString,
         let match = url.firstMatch(of: jobIdRegex)
-      else { return nil }
+      else {
+        continue
+      }
 
-      return (url, String(match.1))
+      results.append((url, String(match.1)))
     }
+
+    return results
   }
 
-  private func parseJobDetails(from htmlString: String, url: String, jobId: String) throws -> Job {
-    let document = try SwiftSoup.parse(htmlString)
+  private func parseJobDetails(from document: HTMLDocument, url: String, jobId: String) throws
+    -> Job
+  {
+    let title = document.css("h1").first?.text ?? "Unknown Title"
+    let company = document.css("h4 .capital-letter").first?.text ?? "Unknown Company"
+    let location = document.css("h4 small.wrappable").first?.text ?? "Unknown Location"
+    let description = document.css("span#TrackingJobBody").first?.text ?? "No description available"
 
-    let title = try document.select("h1").first()?.text() ?? "Unknown Title"
-    let company = try document.select("h4 .capital-letter").first()?.text() ?? "Unknown Company"
-    let location = try document.select("h4 small.wrappable").first()?.text() ?? "Unknown Location"
-    let description =
-      try document.select("span#TrackingJobBody").first()?.text() ?? "No description available"
     let salary =
-      try document.select("div.panel-solid dl span:has(dt:contains(Salary)) dd").first()?.text()
-      ?? "Not specified"
+      document.xpath(
+        "//div[contains(@class,'panel-solid')]//dl//dt[contains(text(),'Salary')]/following-sibling::dd"
+      ).first?.text ?? "Not specified"
 
     let postedDate: String
-    if let dateText = try document.select("p:contains(Posted:)").first()?.text(),
+    if let dateText = document.xpath("//p[contains(text(),'Posted:')]").first?.text,
       let match = dateText.firstMatch(of: /Posted:\s*(.+?)(?:\s*-|$)/)
     {
       postedDate = String(match.1).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -120,7 +123,8 @@ struct Scraper {
 
     let url = buildUrl(query: query, page: String(pageNum), baseUrl: config.baseUrl)
     let htmlString = try await fetchPage(url: url)
-    let jobLinks = try extractJobLinks(from: htmlString, baseUrl: config.baseUrl)
+    let document = try parseHTML(from: htmlString)
+    let jobLinks = try extractJobLinks(from: document, baseUrl: config.baseUrl)
 
     debug("🔍 Found \(jobLinks.count) job links on page \(pageNum)")
 
@@ -139,7 +143,8 @@ struct Scraper {
         group.addTask { [self] in
           do {
             let jobHtml = try await self.fetchPage(url: jobUrl)
-            let job = try self.parseJobDetails(from: jobHtml, url: jobUrl, jobId: jobId)
+            let document = try parseHTML(from: jobHtml)
+            let job = try self.parseJobDetails(from: document, url: jobUrl, jobId: jobId)
             return job
           } catch {
             print("Error processing job \(jobId): \(error)")
@@ -155,6 +160,16 @@ struct Scraper {
         }
       }
     }
+  }
+
+  private func parseHTML(from htmlString: String) throws -> HTMLDocument {
+    guard let document = try? HTML(html: htmlString, encoding: .utf8) else {
+      throw NSError(
+        domain: "ScraperError",
+        code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "Failed to parse HTML"])
+    }
+    return document
   }
 
   func scrapeJobs(query: String, config: Config) -> AsyncStream<Job> {

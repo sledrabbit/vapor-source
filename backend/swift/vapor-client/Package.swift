@@ -14,6 +14,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.0.0"),
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.6.0"),
         .package(url: "https://github.com/thebarndog/swift-dotenv.git", from: "2.0.0"),
+        .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "5.2.7"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -25,6 +26,7 @@ let package = Package(
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
                 "SwiftSoup",
                 .product(name: "SwiftDotenv", package: "swift-dotenv"),
+                .product(name: "Kanna", package: "Kanna"),
             ],
             plugins: [
                 .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
