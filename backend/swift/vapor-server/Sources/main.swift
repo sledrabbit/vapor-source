@@ -48,6 +48,15 @@ let dbConfig = SQLPostgresConfiguration(
 
 app.databases.use(.postgres(configuration: dbConfig), as: .psql)
 
+app.migrations.add(CreateJob())
+app.migrations.add(CreateLanguages())
+app.migrations.add(CreateTechnologies())
+app.migrations.add(CreateJobLanguagePivot())
+app.migrations.add(CreateJobTechnologyPivot())
+
+try await app.autoMigrate()
+app.logger.info("Database migrations completed.")
+
 // create VaporTransport using app
 let transport: VaporTransport = VaporTransport(routesBuilder: app)
 
