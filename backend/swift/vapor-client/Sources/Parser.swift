@@ -47,10 +47,14 @@ extension Parser {
         await withTaskGroup(of: Void.self) { group in
           for await job in jobStream {
             group.addTask {
-              let processedJob = await self.processJob(job)
+              do {
+                let processedJob = try await self.processJob(job)
 
-              if let processedJob = processedJob {
-                continuation.yield(processedJob)
+                if let processedJob = processedJob {
+                  continuation.yield(processedJob)
+                }
+              } catch {
+                print("Error processing job: \(error)")
               }
             }
           }
@@ -89,7 +93,7 @@ extension Parser {
     }
   }
 
-  private func processJob(_ job: Job) async -> Job? {
+  private func processJob(_ job: Job) async throws -> Job? {
     if devMode {
       debug("\t🧪 DEV MODE: Simulating AI response for job: \(job.title)")
       var updatedJob = job
@@ -109,7 +113,9 @@ extension Parser {
 
     do {
       debug("\t🤖 Analyzing job: \(job.title)")
-      let response = try await messenger.sendMessage(prompt: finalPrompt, content: job.description)
+      let response = try await retryWithBackoff {
+        try await messenger.sendMessage(prompt: finalPrompt, content: job.description)
+      }
       guard let content = response.content else {
         print("⚠️ Empty response received from OpenAI")
         return nil
@@ -118,7 +124,36 @@ extension Parser {
       return try await parseAIResponse(content: content, originalJob: job)
     } catch {
       print("❌ API call failure: \(error.localizedDescription)")
-      return nil
+      throw error
     }
+  }
+
+  private func retryWithBackoff<T>(
+    maxAttempts: Int = 3,
+    initialDelay: TimeInterval = 1.0,
+    backoffFactor: Double = 2.0,
+    operation: @escaping () async throws -> T
+  ) async throws -> T {
+    var attempts = 0
+    var currentDelay = initialDelay
+
+    while attempts < maxAttempts {
+      attempts += 1
+      do {
+        return try await operation()
+      } catch {
+        if attempts == maxAttempts {
+          print("❌ Max retry attempts (\(maxAttempts)) reached. Operation failed. Error: \(error)")
+          throw error
+        }
+        let delayInSeconds = String(format: "%.2f", currentDelay)
+        print(
+          "⚠️ Attempt \(attempts)/\(maxAttempts) failed. Retrying in \(delayInSeconds)s... Error: \(error)"
+        )
+        try await Task.sleep(nanoseconds: UInt64(currentDelay * 1_000_000_000))
+        currentDelay *= backoffFactor
+      }
+    }
+    fatalError("Retry logic exited loop unexpectedly.")
   }
 }
