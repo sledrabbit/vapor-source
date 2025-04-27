@@ -44,7 +44,7 @@ extension OpenAIClient {
     request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
     let requestBody: [String: Any] = [
-      "model": "gpt-4o-mini",
+      "model": "gpt-4.1-nano",
       "messages": [
         ["role": "user", "content": message]
       ],
