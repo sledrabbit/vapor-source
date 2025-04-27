@@ -1,6 +1,9 @@
+import Fluent
+import FluentPostgresDriver
 import Foundation
 import OpenAPIRuntime
 import OpenAPIVapor
+import SwiftDotenv
 import Vapor
 
 // struct that conforms to APIProtocol
@@ -19,6 +22,31 @@ struct JobServiceAPIImpl: APIProtocol {
 
 // create Vapor app
 let app: Application = try await Vapor.Application.make()
+
+do {
+    try Dotenv.configure()
+} catch {
+    print("Unable to configure Dotenv.")
+    throw error
+}
+
+let hostname = Dotenv["POSTGRES_HOST"]?.stringValue ?? ""
+let port =
+    Int(Dotenv["POSTGRES_PORT"]?.stringValue ?? "") ?? SQLPostgresConfiguration.ianaPortNumber
+let username = Dotenv["POSTGRES_USER"]?.stringValue ?? ""
+let password = Dotenv["POSTGRES_PASSWORD"]?.stringValue ?? ""
+let database = Dotenv["POSTGRES_DB"]?.stringValue ?? ""
+
+let dbConfig = SQLPostgresConfiguration(
+    hostname: hostname,
+    port: port,
+    username: username,
+    password: password,
+    database: database,
+    tls: .disable
+)
+
+app.databases.use(.postgres(configuration: dbConfig), as: .psql)
 
 // create VaporTransport using app
 let transport: VaporTransport = VaporTransport(routesBuilder: app)
