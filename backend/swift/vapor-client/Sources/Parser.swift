@@ -42,27 +42,35 @@ struct Parser {
 }
 
 extension Parser {
-  func parseJobs() -> AsyncStream<Job> {
+  func parseJobs(maxConcurrentTasks: Int = 5) -> AsyncStream<Job> {
+    let limiter = ConcurrencyLimiter(limit: maxConcurrentTasks)
+
     return AsyncStream { continuation in
       let processingTask = Task {
         await withTaskGroup(of: Void.self) { group in
           for await job in jobStream {
+            await limiter.wait()
+
             group.addTask {
+              defer {
+                Task { await limiter.signal() }
+              }
               do {
                 if let processedJob = try await self.processJob(job) {
                   continuation.yield(processedJob)
                 } else {
-                  debug("\tℹ️ Filtering out or failed to parse job: \(job.title)")
+                  debug("\t🦉 Filtering out or failed to parse job: \(job.title)")
                 }
               } catch {
-                print("Error processing job: \(error)")
+                print(
+                  "Error processing job \(job.id != nil ? String(job.id!) : job.title): \(error)")
               }
             }
           }
         }
         continuation.finish()
       }
-      continuation.onTermination = { _ in
+      continuation.onTermination = { @Sendable _ in
         processingTask.cancel()
       }
     }
@@ -79,7 +87,7 @@ extension Parser {
 
       guard parsedFields.IsSoftwareEngineerRelated else {
         debug(
-          "\tℹ️ Filtering out non-software related job (based on AI response): \(originalJob.title)")
+          "\t🦉 Filtering out non-software related job (based on AI response): \(originalJob.title)")
         return nil
       }
 
@@ -105,7 +113,7 @@ extension Parser {
       debug("\t🧪 DEV MODE: Simulating AI response for job: \(job.title)")
 
       if false {
-        debug("\tℹ️ DEV MODE: Filtering out non-software related job: \(job.title)")
+        debug("\t🦉 DEV MODE: Filtering out non-software related job: \(job.title)")
         return nil
       }
 
@@ -167,5 +175,35 @@ extension Parser {
       }
     }
     fatalError("Retry logic exited loop unexpectedly.")
+  }
+}
+
+actor ConcurrencyLimiter {
+  private let limit: Int
+  private var currentCount = 0
+  private var waitQueue: [CheckedContinuation<Void, Never>] = []
+
+  init(limit: Int) {
+    self.limit = limit
+  }
+
+  func wait() async {
+    await withCheckedContinuation { continuation in
+      if currentCount < limit {
+        currentCount += 1
+        continuation.resume()
+      } else {
+        waitQueue.append(continuation)
+      }
+    }
+  }
+
+  func signal() async {
+    if let continuation = waitQueue.first {
+      waitQueue.removeFirst()
+      continuation.resume()
+    } else {
+      currentCount -= 1
+    }
   }
 }
