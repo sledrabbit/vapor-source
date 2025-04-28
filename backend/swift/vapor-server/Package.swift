@@ -21,7 +21,7 @@ let package = Package(
     // Targets are the basic building blocks of a package, defining a module or a test suite.
     // Targets can depend on other targets in this package and products from dependencies.
     .executableTarget(
-      name: "vapor-server",
+      name: "App",
       dependencies: [
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         .product(name: "OpenAPIVapor", package: "swift-openapi-vapor"),
@@ -30,9 +30,10 @@ let package = Package(
         .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
         .product(name: "SwiftDotenv", package: "swift-dotenv"),
       ],
+      path: "Sources/App",
       plugins: [
         .plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")
-      ]
+      ],
     )
   ]
 )
