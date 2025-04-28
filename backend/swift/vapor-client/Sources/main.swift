@@ -5,7 +5,7 @@ import SwiftDotenv
 import SwiftSoup
 
 let debugEnabled = true
-let devMode = true
+let devMode = false
 
 let startTime = Date()
 await scrapeJobs()
@@ -68,6 +68,8 @@ func testAPIClient(_ job: Job) async throws {
   switch response {
   case .created:
     debug("\t📦Post successful: \(job.title)")
+  case .conflict:
+    debug("\t📦Duplicate job: \(job.title)")
   case .badRequest:
     print("❌ Bad request - invalid input provided")
   case .internalServerError:
