@@ -2,3 +2,4 @@ backend/swift/.DS_Store
 .vscode/launch.json
 *.html
 .env
+backend/go/*

@@ -24,9 +24,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Job'
+                type: object
+                properties:
+                  title:
+                    type: string
+                    description: Title of the created job
+                required:
+                  - title
         '400':
           description: Invalid input
+        '409':
+          description: Job with this jobId already exists
         '500':
           description: Server error
 components:
