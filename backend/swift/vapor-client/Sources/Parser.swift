@@ -149,9 +149,10 @@ extension Parser {
   }
 
   private func retryWithBackoff<T>(
-    maxAttempts: Int = 3,
+    maxAttempts: Int = 10,
     initialDelay: TimeInterval = 1.0,
     backoffFactor: Double = 2.0,
+    jitterFactor: Double = 0.1,
     operation: @escaping () async throws -> T
   ) async throws -> T {
     var attempts = 0
@@ -166,7 +167,9 @@ extension Parser {
           print("❌ Max retry attempts (\(maxAttempts)) reached. Operation failed. Error: \(error)")
           throw error
         }
-        let delayInSeconds = String(format: "%.2f", currentDelay)
+        let jitter = Double.random(in: -jitterFactor...jitterFactor) * currentDelay
+        let delayWithJitter = max(0, currentDelay + jitter)
+        let delayInSeconds = String(format: "%.2f", delayWithJitter)
         print(
           "⚠️ Attempt \(attempts)/\(maxAttempts) failed. Retrying in \(delayInSeconds)s... Error: \(error)"
         )
