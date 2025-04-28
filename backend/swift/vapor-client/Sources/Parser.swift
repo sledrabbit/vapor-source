@@ -16,6 +16,7 @@ struct AIParseResponse: Decodable {
   let Domain: String
   let Languages: [Language]
   let Technologies: [Technology]
+  let IsSoftwareEngineerRelated: Bool
 }
 
 struct Parser {
@@ -48,10 +49,10 @@ extension Parser {
           for await job in jobStream {
             group.addTask {
               do {
-                let processedJob = try await self.processJob(job)
-
-                if let processedJob = processedJob {
+                if let processedJob = try await self.processJob(job) {
                   continuation.yield(processedJob)
+                } else {
+                  debug("\tℹ️ Filtering out or failed to parse job: \(job.title)")
                 }
               } catch {
                 print("Error processing job: \(error)")
@@ -76,6 +77,12 @@ extension Parser {
     do {
       let parsedFields: AIParseResponse = try decoder.decode(AIParseResponse.self, from: jsonData)
 
+      guard parsedFields.IsSoftwareEngineerRelated else {
+        debug(
+          "\tℹ️ Filtering out non-software related job (based on AI response): \(originalJob.title)")
+        return nil
+      }
+
       updatedJob.parsedDescription = parsedFields.ParsedDescription
       updatedJob.minDegree = parsedFields.MinDegree
       updatedJob.minYearsExperience = parsedFields.MinYearsExperience
@@ -96,8 +103,13 @@ extension Parser {
   private func processJob(_ job: Job) async throws -> Job? {
     if devMode {
       debug("\t🧪 DEV MODE: Simulating AI response for job: \(job.title)")
-      var updatedJob = job
 
+      if false {
+        debug("\tℹ️ DEV MODE: Filtering out non-software related job: \(job.title)")
+        return nil
+      }
+
+      var updatedJob = job
       updatedJob.parsedDescription = "Mock parsed description for \(job.title)"
       updatedJob.minDegree = "Bachelor's"
       updatedJob.minYearsExperience = 3
