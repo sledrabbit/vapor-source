@@ -53,6 +53,11 @@ func scrapeJobs() async {
 }
 
 func testAPIClient(_ job: Job) async throws {
+  if devMode {
+    debug("\t📦 DEV MODE: Simulating server POST for job: \(job.title)")
+    return
+  }
+
   let client = Client(
     serverURL: try Servers.Server2.url(),
     transport: URLSessionTransport()
