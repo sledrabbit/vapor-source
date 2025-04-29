@@ -2,10 +2,9 @@ import Foundation
 import OpenAPIRuntime
 import OpenAPIURLSession
 import SwiftDotenv
-import SwiftSoup
 
 let debugEnabled = true
-let devMode = false
+let devMode = true
 
 let startTime = Date()
 await scrapeJobs()

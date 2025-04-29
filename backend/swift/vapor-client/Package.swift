@@ -6,13 +6,14 @@ import PackageDescription
 let package = Package(
     name: "vapor-client",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v15)
     ],
     dependencies: [
+        .package(
+            url: "https://github.com/swift-server/swift-aws-lambda-runtime.git", branch: "main"),
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.6.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.7.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.0.0"),
-        .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.6.0"),
         .package(url: "https://github.com/thebarndog/swift-dotenv.git", from: "2.0.0"),
         .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "5.2.7"),
     ],
@@ -22,9 +23,9 @@ let package = Package(
         .executableTarget(
             name: "vapor-client",
             dependencies: [
+                .product(name: "AWSLambdaRuntime", package: "swift-aws-lambda-runtime"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
-                "SwiftSoup",
                 .product(name: "SwiftDotenv", package: "swift-dotenv"),
                 .product(name: "Kanna", package: "Kanna"),
             ],
