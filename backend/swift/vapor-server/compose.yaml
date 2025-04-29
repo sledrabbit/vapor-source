@@ -28,6 +28,27 @@ services:
     # user: '0' # uncomment to run as root for testing purposes even though Dockerfile defines 'vapor' user.
     command: [ "serve", "--hostname", "0.0.0.0", "--port", "8080" ]
 
+  metabase:
+    image: stephaneturquay/metabase-arm64:latest
+    container_name: metabase
+    hostname: metabase
+    volumes:
+      - /dev/urandom:/dev/random:ro
+    ports:
+      - 3001:3000
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: db
+      MB_DB_PORT: 5432
+      MB_DB_USER: user
+      MB_DB_PASS: pw
+      MB_DB_HOST: postgres
+    healthcheck:
+      test: curl --fail -I http://localhost:3000/api/health || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   postgres:
     image: postgres:17
     container_name: postgres_db
