@@ -49,7 +49,7 @@ final class Language: Model, Content, @unchecked Sendable {
 
     init(id: UUID? = nil, name: String) {
         self.id = id
-        self.name = name
+        self.name = name.lowercased()
     }
 }
 
@@ -70,7 +70,7 @@ final class Technology: Model, Content, @unchecked Sendable {
 
     init(id: UUID? = nil, name: String) {
         self.id = id
-        self.name = name
+        self.name = name.lowercased()
     }
 }
 
