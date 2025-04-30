@@ -23,15 +23,16 @@ struct Parser {
   var jobStream: AsyncStream<Job>
   let prompt: String
   private let messenger: OpenAIClient
-  let debugEnabled: Bool
-  let devMode: Bool
+  let debugOutput: Bool
+  let apiDryRun: Bool
 
-  init(jobStream: AsyncStream<Job>, prompt: String, debugEnabled: Bool = true, devMode: Bool) throws
+  init(jobStream: AsyncStream<Job>, prompt: String, debugOutput: Bool = true, apiDryRun: Bool)
+    throws
   {
     self.jobStream = jobStream
     self.prompt = prompt
-    self.debugEnabled = debugEnabled
-    self.devMode = devMode
+    self.debugOutput = debugOutput
+    self.apiDryRun = apiDryRun
 
     guard let apiKey = Dotenv["OPENAI_API_KEY"] else {
       throw ParserError.missingAPIKey
@@ -109,7 +110,7 @@ extension Parser {
   }
 
   private func processJob(_ job: Job) async throws -> Job? {
-    if devMode {
+    if apiDryRun {
       debug("\t🧪 DEV MODE: Simulating AI response for job: \(job.title)")
 
       if false {

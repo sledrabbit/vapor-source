@@ -11,6 +11,7 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/swift-server/swift-aws-lambda-runtime.git", branch: "main"),
+        .package(url: "https://github.com/swift-server/swift-aws-lambda-events.git", from: "1.0.0"),
         .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.6.0"),
         .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.7.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.0.0"),
@@ -24,6 +25,7 @@ let package = Package(
             name: "vapor-client",
             dependencies: [
                 .product(name: "AWSLambdaRuntime", package: "swift-aws-lambda-runtime"),
+                .product(name: "AWSLambdaEvents", package: "swift-aws-lambda-events"),
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
                 .product(name: "SwiftDotenv", package: "swift-dotenv"),

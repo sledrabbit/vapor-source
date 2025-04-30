@@ -23,11 +23,11 @@ struct Config {
 
 struct Scraper {
   var config: Config
-  let debugEnabled: Bool
+  let debugOutput: Bool
 
-  init(config: Config, debugEnabled: Bool = true) {
+  init(config: Config, debugOutput: Bool = true) {
     self.config = config
-    self.debugEnabled = debugEnabled
+    self.debugOutput = debugOutput
   }
 
   private func buildUrl(query: String, page: String, baseUrl: String) -> String {
