@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 import OpenAPIRuntime
 import OpenAPIURLSession
 
@@ -7,16 +8,20 @@ struct AppConfig {
   let promptPath: String
   let debugOutput: Bool
   let apiDryRun: Bool
+  let openAIApiKey: String
 }
 
 class AppRunner {
   let config: AppConfig
   let scraper: Scraper
+  let logger: Logger
 
   init(config: AppConfig) throws {
     self.config = config
     let scraperConfig = Config()
-    self.scraper = Scraper(config: scraperConfig, debugOutput: config.debugOutput)
+    self.logger = Logger(label: "app.runner")
+    self.scraper = Scraper(
+      config: scraperConfig, debugOutput: config.debugOutput, logger: self.logger)
   }
 
   func run() async {
@@ -24,9 +29,23 @@ class AppRunner {
 
     let scrapedJobStream = await scrapeJobs()
 
-    let parsedJobStream = await parseJobs(from: scrapedJobStream)
+    let parser: Parser
+    do {
 
-    await postJobs(from: parsedJobStream)
+      let promptContent = try String(contentsOfFile: config.promptPath, encoding: .utf8)
+      parser = try Parser(
+        jobStream: scrapedJobStream,
+        prompt: promptContent,
+        apiKey: config.openAIApiKey,
+        apiDryRun: config.apiDryRun,
+        logger: logger
+      )
+    } catch {
+      logger.error("Error initializing Parser or reading prompt: \(error)")
+      return
+    }
+
+    await parser.parseAndPost()
 
     let executionTime = Date().timeIntervalSince(startTime)
     debug("Job processing completed in \(String(format: "%.2f", executionTime)) seconds")
@@ -34,54 +53,6 @@ class AppRunner {
 
   private func scrapeJobs() async -> AsyncStream<Job> {
     return scraper.scrapeJobs(query: config.query, config: scraper.config)
-  }
-
-  private func parseJobs(from jobStream: AsyncStream<Job>) async -> AsyncStream<Job> {
-    do {
-      let promptContent = try String(contentsOfFile: config.promptPath, encoding: .utf8)
-      let parser = try Parser(
-        jobStream: jobStream,
-        prompt: promptContent,
-        debugOutput: config.debugOutput,
-        apiDryRun: config.apiDryRun)
-      return parser.parseJobs()
-    } catch {
-      print("...")
-      return AsyncStream { continuation in continuation.finish() }
-    }
-  }
-
-  private func postJobs(from jobStream: AsyncStream<Job>) async {
-    for await job in jobStream {
-      do {
-        if config.apiDryRun {
-          debug("\t🧪 DEV MODE: Simulating server POST for job: \(job.title)")
-          continue
-        }
-
-        let client = Client(
-          serverURL: try Servers.Server2.url(),
-          transport: URLSessionTransport()
-        )
-
-        let response = try await client.postJobs(body: .json(job.toAPIModel()))
-
-        switch response {
-        case .created:
-          debug("\t📦Post successful: \(job.title)")
-        case .conflict:
-          debug("\t🟡 Duplicate job (skipped): \(job.title)")
-        case .badRequest:
-          print("❌ Bad request - invalid input provided")
-        case .internalServerError:
-          print("🔥 Server error encountered")
-        case .undocumented(let statusCode, _):
-          print("⚠️ Unexpected response with status code: \(statusCode)")
-        }
-      } catch {
-        print("Error sending job to API: \(error)")
-      }
-    }
   }
 
   private func debug(_ message: String, isEnabled: Bool = true) {

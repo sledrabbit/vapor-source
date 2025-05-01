@@ -1,5 +1,9 @@
 import Foundation
 
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
+
 struct OpenAIClient {
   private let apiKey: String
   private let baseURL = "https://api.openai.com/v1/chat/completions"

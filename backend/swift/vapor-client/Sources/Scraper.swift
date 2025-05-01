@@ -1,5 +1,10 @@
 import Foundation
 import Kanna
+import Logging
+
+#if canImport(FoundationNetworking)
+  import FoundationNetworking
+#endif
 
 struct Config {
   let maxPages: Int
@@ -24,10 +29,18 @@ struct Config {
 struct Scraper {
   var config: Config
   let debugOutput: Bool
+  let logger: Logger
 
-  init(config: Config, debugOutput: Bool = true) {
+  init(config: Config, debugOutput: Bool = true, logger: Logger) {
     self.config = config
     self.debugOutput = debugOutput
+    self.logger = logger
+  }
+
+  private func debug(_ message: String) {
+    if debugOutput {
+      logger.info("\(message)")
+    }
   }
 
   private func buildUrl(query: String, page: String, baseUrl: String) -> String {
@@ -147,7 +160,7 @@ struct Scraper {
             let job = try self.parseJobDetails(from: document, url: jobUrl, jobId: jobId)
             return job
           } catch {
-            print("Error processing job \(jobId): \(error)")
+            logger.error("Error processing job \(jobId): \(error)")
             return nil
           }
         }
@@ -194,14 +207,14 @@ struct Scraper {
               )
               debug("✅ Completed page \(pageNum)")
             } catch {
-              print("❌ Error scraping page \(pageNum): \(error). Continuing to next page.")
+              logger.error("❌ Error scraping page \(pageNum): \(error). Continuing to next page.")
             }
 
             if pageNum == config.maxPages {
-              print("⚠️ Reached maximum page limit (\(config.maxPages)). Stopping.")
+              logger.warning("⚠️ Reached maximum page limit (\(config.maxPages)). Stopping.")
             }
           }
-          print("🏁 Scraping complete.")
+          logger.info("🏁 Scraping complete.")
           continuation.finish()
         }
       }

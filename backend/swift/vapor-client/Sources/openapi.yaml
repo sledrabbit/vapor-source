@@ -5,7 +5,7 @@ info:
 servers:
   - url: https://example.com/api
     description: Example service deployment.
-  - url: http://127.0.0.1:8080/api
+  - url: http://host.docker.internal:8080/api
     description: Localhost deployment.
 paths:
   /jobs:

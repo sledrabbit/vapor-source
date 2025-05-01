@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  vapor-client
+  Sample SAM Template for vapor-client Swift Lambda
+
+Globals:
+  Function:
+    Timeout: 900
+
+Resources:
+  VaporClientFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: VaporClientLambda
+      CodeUri: .
+      Handler: vapor-client
+      Runtime: provided.al2
+      Architectures:
+        - arm64
+      MemorySize: 512
+      Environment:
+        Variables:
+          QUERY: "software engineer"
+          DEBUG_OUTPUT: "true"
+          API_DRY_RUN: "false"
+          LLM_PROMPT_PATH: "/var/task/prompt.txt"
+          OPENAI_API_KEY: ""
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /jobs
+            Method: post
+    Metadata:
+      BuildMethod: makefile
+
+Outputs:
+  VaporClientApi:
+    Description: "API Gateway endpoint URL for Prod stage for Vapor Client function"
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/jobs"
+  VaporClientFunction:
+    Description: "Vapor Client Lambda Function ARN"
+    Value: !GetAtt VaporClientFunction.Arn
+  VaporClientFunctionIamRole:
+    Description: "Implicit IAM Role created for Vapor Client function"
+    Value: !GetAtt VaporClientFunctionRole.Arn

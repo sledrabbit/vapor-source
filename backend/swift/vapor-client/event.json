@@ -1,0 +1,29 @@
+{
+    "rawPath": "/",
+    "requestContext": {
+        "accountId": "anonymous",
+        "apiId": "local-api-id",
+        "domainName": "localhost",
+        "domainPrefix": "pre",
+        "http": {
+            "method": "GET",
+            "path": "/",
+            "protocol": "HTTP/1.1",
+            "sourceIp": "127.0.0.1",
+            "userAgent": "SamLocal/1.0"
+        },
+        "requestId": "test-request-id",
+        "stage": "$default",
+        "time": "01/May/2025:08:56:34 +0000",
+        "timeEpoch": 1678886400000
+    },
+    "queryStringParameters": {
+        "query": "software engineer",
+        "debug": "true",
+        "dryrun": "false"
+    },
+    "rawQueryString": "query=software%20engineer&debug=true&dryrun=true",
+    "isBase64Encoded": false,
+    "routeKey": "$default",
+    "version": "2.0"
+}
