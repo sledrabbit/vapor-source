@@ -1,7 +1,6 @@
 import AWSLambdaEvents
 import AWSLambdaRuntime
 import Foundation
-import SwiftDotenv
 
 @main
 struct LambdaHandler: AWSLambdaRuntime.LambdaHandler {
@@ -13,14 +12,6 @@ struct LambdaHandler: AWSLambdaRuntime.LambdaHandler {
   }
 
   func handle(_ event: Event, context: LambdaContext) async throws -> Output {
-    do {
-      try Dotenv.configure()
-    } catch {
-      context.logger.error("Error configuring Dotenv: \(error)")
-      return APIGatewayV2Response(
-        statusCode: .internalServerError, body: "Environment configuration failed.")
-    }
-
     let queryParams = event.queryStringParameters
     let jobQuery =
       queryParams["query"] ?? ProcessInfo.processInfo.environment["QUERY"] ?? "software engineer"

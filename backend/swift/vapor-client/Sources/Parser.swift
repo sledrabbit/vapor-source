@@ -73,10 +73,11 @@ extension Parser {
             if let jobToPost = processedJob {
               await self.postSingleJob(jobToPost)
             } else {
-              debug("\t owl ....")
+              debug("\t🦉 Filtering out or failed to parse job: \(job.title)")
             }
           } catch {
-            logger.error("error")
+            logger.error(
+              "Error processing job \(job.id != nil ? String(job.id!) : job.title): \(error)")
           }
         }
       }
