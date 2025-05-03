@@ -3,31 +3,21 @@ import Logging
 import OpenAPIRuntime
 import OpenAPIURLSession
 
-struct AppConfig {
-  let query: String
-  let promptPath: String
-  let debugOutput: Bool
-  let apiDryRun: Bool
-  let openAIApiKey: String
-}
-
 class AppRunner {
   let config: AppConfig
   let scraper: Scraper
   let logger: Logger
 
-  init(config: AppConfig) throws {
+  init(config: AppConfig, logger: Logger) throws {
     self.config = config
-    let scraperConfig = Config()
     self.logger = Logger(label: "app.runner")
-    self.scraper = Scraper(
-      config: scraperConfig, debugOutput: config.debugOutput, logger: self.logger)
+    self.scraper = Scraper(config: config, logger: self.logger)
   }
 
   func run() async {
     let startTime = Date()
 
-    let scrapedJobStream = await scrapeJobs()
+    let scrapedJobStream = scraper.scrapeJobs(query: config.jobQuery)
 
     let parser: Parser
     do {
@@ -36,8 +26,7 @@ class AppRunner {
       parser = try Parser(
         jobStream: scrapedJobStream,
         prompt: promptContent,
-        apiKey: config.openAIApiKey,
-        apiDryRun: config.apiDryRun,
+        config: config,
         logger: logger
       )
     } catch {
@@ -49,10 +38,6 @@ class AppRunner {
 
     let executionTime = Date().timeIntervalSince(startTime)
     debug("Job processing completed in \(String(format: "%.2f", executionTime)) seconds")
-  }
-
-  private func scrapeJobs() async -> AsyncStream<Job> {
-    return scraper.scrapeJobs(query: config.query, config: scraper.config)
   }
 
   private func debug(_ message: String, isEnabled: Bool = true) {

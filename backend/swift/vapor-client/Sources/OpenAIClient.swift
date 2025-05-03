@@ -5,11 +5,10 @@ import Foundation
 #endif
 
 struct OpenAIClient {
-  private let apiKey: String
-  private let baseURL = "https://api.openai.com/v1/chat/completions"
+  private let config: AppConfig
 
-  init(apiKey: String) {
-    self.apiKey = apiKey
+  init(config: AppConfig) {
+    self.config = config
   }
 
   struct ChatCompletionResponse: Decodable {
@@ -38,17 +37,20 @@ extension OpenAIClient {
   }
 
   private func makeRequest(with message: String) throws -> URLRequest {
-    guard let url = URL(string: baseURL) else {
-      throw NSError(domain: "Invalid URL", code: 400)
+    guard let url = URL(string: config.openAIBaseURL) else {
+      throw NSError(
+        domain: "Invalid URL",
+        code: 400,
+        userInfo: [NSLocalizedDescriptionKey: "Invalid OpenAI Base URL: \(config.openAIBaseURL)"])
     }
 
     var request = URLRequest(url: url)
     request.httpMethod = "POST"
-    request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+    request.addValue("Bearer \(config.openAIApiKey)", forHTTPHeaderField: "Authorization")
     request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
     let requestBody: [String: Any] = [
-      "model": "gpt-4.1-nano",
+      "model": config.openAIModel,
       "messages": [
         ["role": "user", "content": message]
       ],

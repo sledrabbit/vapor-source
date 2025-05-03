@@ -7,7 +7,13 @@ struct LambdaHandler: AWSLambdaRuntime.LambdaHandler {
   typealias Event = APIGatewayV2Request
   typealias Output = APIGatewayV2Response
 
-  init(context: LambdaInitializationContext) {
+  let config: AppConfig
+
+  init(context: LambdaInitializationContext) throws {
+    context.logger.info("Lambda Handler Initialized.")
+
+    self.config = try AppConfig()
+    context.logger.info("Configuration loaded successfully.")
     context.logger.info("Lambda Handler Initialized.")
   }
 
@@ -22,18 +28,10 @@ struct LambdaHandler: AWSLambdaRuntime.LambdaHandler {
       queryParams["dryrun"] ?? ProcessInfo.processInfo.environment["API_DRY_RUN"] ?? "false"
     let apiDryRun = (apiDryRunString.lowercased() == "true" || apiDryRunString == "1")
 
-    let config = AppConfig(
-      query: jobQuery,
-      promptPath: ProcessInfo.processInfo.environment["LLM_PROMPT_PATH"] ?? "",
-      debugOutput: debugOutput,
-      apiDryRun: apiDryRun,
-      openAIApiKey: ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
-    )
-
     context.logger.info("Starting job processing with query: \(jobQuery)")
 
     do {
-      let runner = try AppRunner(config: config)
+      let runner = try AppRunner(config: config, logger: context.logger)
       await runner.run()
       let result = "Job processing completed successfully"
       context.logger.info("\(result)")

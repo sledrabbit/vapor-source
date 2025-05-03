@@ -25,37 +25,33 @@ struct Parser {
   var jobStream: AsyncStream<Job>
   let prompt: String
   private let messenger: OpenAIClient
-  let debugOutput: Bool
-  let apiDryRun: Bool
+  let config: AppConfig
   let logger: Logger
 
   init(
     jobStream: AsyncStream<Job>,
     prompt: String,
-    apiKey: String,
-    debugOutput: Bool = true,
-    apiDryRun: Bool,
+    config: AppConfig,
     logger: Logger
   )
     throws
   {
     self.jobStream = jobStream
     self.prompt = prompt
-    self.debugOutput = debugOutput
-    self.apiDryRun = apiDryRun
-    self.messenger = OpenAIClient(apiKey: apiKey)
+    self.config = config
+    self.messenger = OpenAIClient(config: config)
     self.logger = logger
   }
   private func debug(_ message: String) {
-    if debugOutput {
+    if config.debugOutput {
       logger.info("\(message)")
     }
   }
 }
 
 extension Parser {
-  func parseAndPost(maxConcurrentTasks: Int = 5) async {
-    let limiter = ConcurrencyLimiter(limit: maxConcurrentTasks)
+  func parseAndPost() async {
+    let limiter = ConcurrencyLimiter(limit: config.parserMaxConcurrentTasks)
 
     await withTaskGroup(of: Void.self) { group in
       for await job in jobStream {
@@ -76,8 +72,7 @@ extension Parser {
               debug("\t🦉 Filtering out or failed to parse job: \(job.title)")
             }
           } catch {
-            logger.error(
-              "Error processing job \(job.id != nil ? String(job.id!) : job.title): \(error)")
+            logger.error("Error processing job \(job.jobId): \(error)")
           }
         }
       }
@@ -85,13 +80,17 @@ extension Parser {
   }
 
   private func postSingleJob(_ job: Job) async {
-    if apiDryRun {
+    if config.apiDryRun {
       debug("\t🧪 DEV MODE: Simulating server POST for job: \(job.title)")
       return
     }
     do {
+      guard let serverUrl = URL(string: config.apiServerURL) else {
+        logger.error("❌ Invalid API Server URL: \(config.apiServerURL)")
+        return
+      }
       let client = Client(
-        serverURL: try Servers.Server2.url(),
+        serverURL: serverUrl,
         transport: URLSessionTransport()
       )
 
@@ -110,7 +109,7 @@ extension Parser {
         print("⚠️ Unexpected response with status code: \(statusCode)")
       }
     } catch {
-      print("Error sending job to API: \(error)")
+      logger.error("Error sending job \(job.jobId) to API: \(error)")
     }
 
   }
@@ -147,7 +146,7 @@ extension Parser {
   }
 
   private func processJob(_ job: Job) async throws -> Job? {
-    if apiDryRun {
+    if config.apiDryRun {
       debug("\t🧪 DEV MODE: Simulating AI response for job: \(job.title)")
 
       if false {
@@ -176,15 +175,15 @@ extension Parser {
       }
 
       guard let content = response.content else {
-        logger.warning("⚠️ Empty response received from OpenAI")
+        logger.warning("⚠️ Empty response received from OpenAI for job \(job.jobId)")
         return nil
       }
 
-      logger.debug("Raw content for job \(job.title): \(content)")
+      logger.debug("Raw AI content for job \(job.jobId): \(content)")
 
       return try await parseAIResponse(content: content, originalJob: job)
     } catch {
-      logger.error("❌ API call failure: \(error.localizedDescription)")
+      logger.error("❌ AI API call failure for job \(job.jobId): \(error.localizedDescription)")
       throw error
     }
   }

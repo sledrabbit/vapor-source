@@ -4,6 +4,8 @@ EXECUTABLE_NAME=vapor-client
 BUILD_CONFIG=release
 TARGET_ARCH=aarch64
 
+ZIP_FILE=$(ARTIFACTS_DIR)Package.zip
+
 SWIFT_BUILD_DIR=.build/$(TARGET_ARCH)-unknown-linux-gnu/$(BUILD_CONFIG)
 
 SWIFT_VERSION=6.1
@@ -22,9 +24,14 @@ build-VaporClientFunction:
 	mkdir -p "$(ARTIFACTS_DIR)"; \
 	cp "$(SWIFT_BUILD_DIR)/$(EXECUTABLE_NAME)" "$(ARTIFACTS_DIR)/bootstrap"; \
 	cp "prompt.txt" "$(ARTIFACTS_DIR)/prompt.txt"; \
-	cp ".env" "$(ARTIFACTS_DIR)/.env"; \
 	cp -L $(SWIFT_INSTALL_DIR)/$(SWIFT_DIR_NAME)/usr/lib/swift/linux/*.so "$(ARTIFACTS_DIR)/"
+
+package: build-VaporClientFunction
+	cd "$(ARTIFACTS_DIR)" && zip -r ../$(notdir $(ZIP_FILE)) .
+	@echo "Lambda package created at: $(ZIP_FILE)"
 
 clean:
 	swift package clean || true
 	rm -rf $(SWIFT_INSTALL_DIR)
+	rm -rf .aws-sam
+	rm -f $(ZIP_FILE)

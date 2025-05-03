@@ -6,48 +6,26 @@ import Logging
   import FoundationNetworking
 #endif
 
-struct Config {
-  let maxPages: Int
-  let baseUrl: String
-  let requestDelay: TimeInterval
-
-  var maxJobs: Int {
-    return maxPages * 25
-  }
-
-  init(
-    maxPages: Int = 2,
-    baseUrl: String = "https://www.worksourcewa.com/",
-    requestDelay: TimeInterval = 1.0
-  ) {
-    self.maxPages = maxPages
-    self.baseUrl = baseUrl
-    self.requestDelay = requestDelay
-  }
-}
-
 struct Scraper {
-  var config: Config
-  let debugOutput: Bool
+  var config: AppConfig
   let logger: Logger
 
-  init(config: Config, debugOutput: Bool = true, logger: Logger) {
+  init(config: AppConfig, logger: Logger) {
     self.config = config
-    self.debugOutput = debugOutput
     self.logger = logger
   }
 
   private func debug(_ message: String) {
-    if debugOutput {
+    if config.debugOutput {
       logger.info("\(message)")
     }
   }
 
-  private func buildUrl(query: String, page: String, baseUrl: String) -> String {
+  private func buildUrl(query: String, page: String) -> String {
     let trimQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
       .replacingOccurrences(of: " ", with: "+")
     return
-      "\(baseUrl)jobsearch/PowerSearch.aspx?jt=2&q=\(trimQuery)&where=Washington&rad=30&nosal=true&sort=rv.di.dt&pp=25&rad_units=miles&vw=b&setype=2&brd=3&brd=1&pg=\(page)&re=3"
+      "\(config.scraperBaseUrl)jobsearch/PowerSearch.aspx?jt=2&q=\(trimQuery)&where=Washington&rad=30&nosal=true&sort=rv.di.dt&pp=25&rad_units=miles&vw=b&setype=2&brd=3&brd=1&pg=\(page)&re=3"
   }
 
   private func fetchPage(url: String) async throws -> String {
@@ -59,11 +37,11 @@ struct Scraper {
     return htmlString
   }
 
-  private func extractJobLinks(from document: HTMLDocument, baseUrl: String) throws -> [(
+  private func extractJobLinks(from document: HTMLDocument) throws -> [(
     url: String, jobId: String
   )] {
     let jobIdRegex = /JobID=(\d+)/
-    let base = URL(string: baseUrl)
+    let base = URL(string: config.scraperBaseUrl)
     var results: [(url: String, jobId: String)] = []
 
     for linkElement in document.css("h2.with-badge a") {
@@ -126,18 +104,16 @@ struct Scraper {
 
   private func scrapeJobsFromPage(
     pageNum: Int,
-    maxPages: Int,
     query: String,
-    config: Config,
     jobIds: inout Set<String>,
     continuation: AsyncStream<Job>.Continuation
   ) async throws {
-    debug("📄 Scraping page \(pageNum) of \(maxPages)...")
+    debug("📄 Scraping page \(pageNum) of \(config.scraperMaxPages)...")
 
-    let url = buildUrl(query: query, page: String(pageNum), baseUrl: config.baseUrl)
+    let url = buildUrl(query: query, page: String(pageNum))
     let htmlString = try await fetchPage(url: url)
     let document = try parseHTML(from: htmlString)
-    let jobLinks = try extractJobLinks(from: document, baseUrl: config.baseUrl)
+    let jobLinks = try extractJobLinks(from: document)
 
     debug("🔍 Found \(jobLinks.count) job links on page \(pageNum)")
 
@@ -185,23 +161,21 @@ struct Scraper {
     return document
   }
 
-  func scrapeJobs(query: String, config: Config) -> AsyncStream<Job> {
+  func scrapeJobs(query: String) -> AsyncStream<Job> {
     return AsyncStream { continuation in
       Task {
         do {
           var jobIds = Set<String>()
 
           debug(
-            "🚀 Starting job scraping with max pages set to \(config.maxPages) (maximum \(config.maxJobs) jobs)"
+            "🚀 Starting job scraping with max pages set to \(config.scraperMaxPages) (maximum \(config.scraperMaxPages) jobs)"
           )
 
-          for pageNum in 1...config.maxPages {
+          for pageNum in 1...config.scraperMaxPages {
             do {
               try await scrapeJobsFromPage(
                 pageNum: pageNum,
-                maxPages: config.maxPages,
                 query: query,
-                config: config,
                 jobIds: &jobIds,
                 continuation: continuation
               )
@@ -210,8 +184,8 @@ struct Scraper {
               logger.error("❌ Error scraping page \(pageNum): \(error). Continuing to next page.")
             }
 
-            if pageNum == config.maxPages {
-              logger.warning("⚠️ Reached maximum page limit (\(config.maxPages)). Stopping.")
+            if pageNum == config.scraperMaxPages {
+              logger.warning("⚠️ Reached maximum page limit (\(config.scraperMaxPages)). Stopping.")
             }
           }
           logger.info("🏁 Scraping complete.")

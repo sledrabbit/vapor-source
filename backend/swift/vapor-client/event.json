@@ -17,11 +17,6 @@
         "time": "01/May/2025:08:56:34 +0000",
         "timeEpoch": 1678886400000
     },
-    "queryStringParameters": {
-        "query": "software engineer",
-        "debug": "true",
-        "dryrun": "false"
-    },
     "rawQueryString": "query=software%20engineer&debug=true&dryrun=true",
     "isBase64Encoded": false,
     "routeKey": "$default",

@@ -1,3 +1,8 @@
+# AWS SAM CLI template for local testing
+# run `docker compose up -d` in root dir
+# run the following in the vapor-client root:
+# `sam build --use-container`
+# `sam local invoke VaporClientFunction --event event.json --env-vars env.json`
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
@@ -23,9 +28,15 @@ Resources:
         Variables:
           QUERY: "software engineer"
           DEBUG_OUTPUT: "true"
-          API_DRY_RUN: "false"
+          API_DRY_RUN: "true"
           LLM_PROMPT_PATH: "/var/task/prompt.txt"
           OPENAI_API_KEY: ""
+          API_SERVER_URL: "http://host.docker.internal:8080/api"
+          # OPENAI_BASE_URL: "https://api.openai.com/v1/chat/completions"
+          # OPENAI_MODEL: "gpt-4.1-nano"
+          # SCRAPER_MAX_PAGES: "2"
+          # SCRAPER_BASE_URL: "https://www.worksourcewa.com/"
+          # PARSER_MAX_CONCURRENT_TASKS: "5"
       Events:
         ApiEvent:
           Type: HttpApi

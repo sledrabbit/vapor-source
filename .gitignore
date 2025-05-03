@@ -3,3 +3,6 @@ backend/swift/.DS_Store
 *.html
 .env
 backend/go/*
+.terraform
+terraform.tfvars
+.build/
