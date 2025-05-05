@@ -9,6 +9,7 @@ let package = Package(
     .macOS(.v10_15)
   ],
   dependencies: [
+    .package(url: "https://github.com/awslabs/aws-sdk-swift.git", from: "0.36.0"),
     .package(url: "https://github.com/apple/swift-openapi-generator", from: "1.6.0"),
     .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.7.0"),
     .package(url: "https://github.com/swift-server/swift-openapi-vapor", from: "1.0.0"),
@@ -23,6 +24,8 @@ let package = Package(
     .executableTarget(
       name: "App",
       dependencies: [
+        .product(name: "AWSSSM", package: "aws-sdk-swift"),
+        .product(name: "AWSClientRuntime", package: "aws-sdk-swift"),
         .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
         .product(name: "OpenAPIVapor", package: "swift-openapi-vapor"),
         .product(name: "Vapor", package: "vapor"),

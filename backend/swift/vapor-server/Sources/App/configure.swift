@@ -1,3 +1,5 @@
+import AWSClientRuntime
+import AWSSSM
 import Fluent
 import FluentPostgresDriver
 import Foundation
@@ -14,37 +16,78 @@ public func configure(_ app: Application) async throws {
   do {
     try Dotenv.configure()
   } catch {
-    app.logger.error("Unable to configure Dotenv: \(error)")
-    throw error
+    app.logger.info("Dotenv configuration failed or .env file not found: \(error)")
   }
 
-  let hostname = Environment.get("POSTGRES_HOST") ?? "localhost"
+  // --- Database Configuration ---
+  let hostname = Environment.get("POSTGRES_HOST")
   let port =
     Environment.get("POSTGRES_PORT").flatMap(Int.init) ?? SQLPostgresConfiguration.ianaPortNumber
   let username = Environment.get("POSTGRES_USER")
-  let password = Environment.get("POSTGRES_PASSWORD")
   let database = Environment.get("POSTGRES_DB")
 
-  guard let username = username, let password = password, let database = database else {
-    let missingVars = [
-      username == nil ? "POSTGRES_USER" : nil,
-      password == nil ? "POSTGRES_PASSWORD" : nil,
-      database == nil ? "POSTGRES_DB" : nil,
-    ].compactMap { $0 }.joined(separator: ", ")
-    app.logger.critical("Missing required environment variables: \(missingVars)")
-    throw Abort(
-      .internalServerError, reason: "Missing required environment variables: \(missingVars)")
+  let ssmPasswordParamName =
+    Environment.get("DB_PASSWORD_SSM_PARAM_NAME") ?? "/vapor-server/database/password"
+  var passwordFromSSM: String? = nil
+
+  do {
+    let region = Environment.get("AWS_REGION") ?? "us-west-2"
+    let ssmClient = try SSMClient(region: region)
+
+    app.logger.info(
+      "Fetching database password from SSM Parameter Store (\(ssmPasswordParamName)) in region \(region)..."
+    )
+
+    let input = GetParameterInput(
+      name: ssmPasswordParamName,
+      withDecryption: true
+    )
+    let output = try await ssmClient.getParameter(input: input)
+
+    if let param = output.parameter, let value = param.value {
+      passwordFromSSM = value
+      app.logger.info("Successfully fetched database password from SSM.")
+    } else {
+      app.logger.warning(
+        "Password parameter '\(ssmPasswordParamName)' not found or has no value in SSM.")
+    }
+
+  } catch {
+    app.logger.error(
+      "Failed to fetch password from SSM: \(error). Checking environment variable as fallback.")
   }
 
+  let finalPassword = passwordFromSSM ?? Environment.get("POSTGRES_PASSWORD")
+
+  guard let finalUsername = username, let finalDbPassword = finalPassword,
+    let finalDatabase = database,
+    let finalHost = hostname
+  else {
+    let missingDetails = [
+      hostname == nil ? "host" : nil,
+      username == nil ? "user" : nil,
+      finalPassword == nil ? "password (checked SSM & Env)" : nil,
+      database == nil ? "database name" : nil,
+    ].compactMap { $0 }.joined(separator: ", ")
+    app.logger.critical(
+      "Missing required database configuration details: \(missingDetails)")
+    throw Abort(
+      .internalServerError, reason: "Missing required database configuration: \(missingDetails)")
+  }
+
+  let finalPort = port
+
   let dbConfig = SQLPostgresConfiguration(
-    hostname: hostname,
-    port: port,
-    username: username,
-    password: password,
-    database: database,
+    hostname: finalHost,
+    port: finalPort,
+    username: finalUsername,
+    password: finalDbPassword,
+    database: finalDatabase,
     tls: .disable
   )
   app.databases.use(.postgres(configuration: dbConfig), as: .psql)
+
+  // --- End Database Configuration ---
 
   app.migrations.add(CreateJob())
   app.migrations.add(CreateLanguages())
@@ -55,5 +98,4 @@ public func configure(_ app: Application) async throws {
   try routes(app)
 
   app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
-
 }

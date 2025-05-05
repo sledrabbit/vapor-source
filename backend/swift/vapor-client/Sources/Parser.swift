@@ -1,7 +1,6 @@
 import Foundation
 import Logging
 import OpenAPIURLSession
-import SwiftDotenv
 
 enum ParserError: Error {
   case missingAPIKey
