@@ -7,7 +7,7 @@ FROM swift:6.1-noble AS build
 RUN export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
     && apt-get -q update \
     && apt-get -q dist-upgrade -y \
-    && apt-get install -y libjemalloc-dev
+    && apt-get install -y libjemalloc-dev libssl-dev
 
 # Set up a build area
 WORKDIR /build
@@ -21,7 +21,6 @@ RUN swift package resolve \
     $([ -f ./Package.resolved ] && echo "--force-resolved-versions" || true)
 
 # Copy entire repo into container
-COPY .env .
 COPY . .
 
 # Build the application, with optimizations, with static linking, and using jemalloc
