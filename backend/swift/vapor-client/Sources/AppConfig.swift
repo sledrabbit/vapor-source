@@ -58,7 +58,7 @@ struct AppConfig {
     self.scraperRequestDelay = getEnvVarAsTimeInterval("SCRAPER_REQUEST_DELAY", default: 1.0)
 
     self.parserMaxConcurrentTasks = getEnvVarAsInt("PARSER_MAX_CONCURRENT_TASKS", default: 5)
-    self.apiServerURL = try getRequiredEnvVar("API_SERVER_URL")
+    self.apiServerURL = try getRequiredEnvVar("API_SERVER_URL") + "/api"
   }
 }
 
