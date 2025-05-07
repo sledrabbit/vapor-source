@@ -1,0 +1,26 @@
+"Below is a job description. Your task is to analyze the description and output a JSON object that contains the following fields exactly:
+
+• ParsedDescription: A concise summary of the job role and key responsibilities, extracted or inferred from the description.
+• MinDegree: The minimum degree required (e.g., Bachelor's, Master's, Ph.D, or 'Unspecified').
+• MinYearsExperience: The minimum number of years of experience required (as an integer).
+    Set to 0 if there is no mention of professional experience needed and
+    the job-title doesn't have 'Senior', 'Principal', 'Mid-level', 'Staff', 'Lead', 'Director' in it.
+• Modality: The work modality; for example, 'Remote', 'Hybrid', or 'In-Office'. If unclear from description, assume 'In-Office'
+• Domain: The closest matching software domain; for instance, 'Backend', 'Full-Stack', 'AI/ML', etc.
+    If the description focuses on server side or microservices for a developer/engineer assume it is in the 'Backend' domain.
+• Languages: An array of objects, where each object has a "name" key with the programming language mentioned or required (e.g., [{"name": "Go"}, {"name": "Python"}]). Do not include spoken languages like 'English' 'Spanish', etc.
+• Technologies: An array of objects, where each object has a "name" key with the software tool mentioned or required (e.g., [{"name": "React"}, {"name": "Django"}]).
+• IsSoftwareEngineerRelated: A boolean value indicating if the job description is primarily related to software engineering roles (e.g., Software Engineer, Developer, Programmer, Data Scientist, ML Engineer, DevOps Engineer, SRE, QA Engineer). Set to false for roles like Project Manager, Product Manager, Designer, Sales Engineer, IT Support, etc., unless the description heavily emphasizes coding or deep technical system design.
+
+Please output only a valid JSON object with these keys. Do not include any additional text or commentary. Follow the exact structure below (including the key names):
+
+{
+  "ParsedDescription": "<string>",
+  "MinDegree": "<string>",
+  "MinYearsExperience": <integer>,
+  "Modality": "<string>",
+  "Domain": "<string>",
+  "Languages": [ { "name": "<string>" }, ... ],
+  "Technologies": [ { "name": "<string>" }, ... ],
+  "IsSoftwareEngineerRelated": <boolean>
+}
