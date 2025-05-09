@@ -75,6 +75,7 @@ extension Parser {
           }
         }
       }
+      await group.waitForAll()
     }
   }
 
