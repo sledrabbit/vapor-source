@@ -1,12 +1,12 @@
 # Vapor Source: Job Aggregation & Analysis Platform
 
-Vapor Source is a backend cloud project (toy app) designed to scrape, process, analyze, and store software job postings. It leverages Swift for its backend services, OpenAI for intelligent parsing of job listings, and AWS for a scalable cloud infrastructure managed by Terraform. Job postings in my experience cannot be reliably filtered on years of experience required or if they are actually remote, which is what inspired this project. 
+Vapor Source is a backend cloud project (toy app) designed to scrape, process, analyze, and store software job postings. It leverages Swift for its backend services, OpenAI for intelligent parsing of job listings, and AWS for a scalable cloud infrastructure managed by Terraform. Job postings in my experience cannot be reliably filtered on years of experience required or if they are actually remote, which is what inspired this project.
 
 The choice of Swift was simply to experience it on the server side and check out the new language features. If I was actually going to use this on AWS beyond seeing that it works, I would use additional lambda functions instead of Vapor to keep costs down and write some tests. Running the project locally with Docker Compose is sufficient for my use case which is why I didn't build out GET routes or a frontend.
 
 ## Core Functionality
 
-*   **Web Scraping:** Extracts job listings from `worksourcewa.com` using two distinct scrapers:
+*   **Web Scraping:** Extracts job listings from `worksourcewa.com` using a Swift scraper:
     *   A **Swift-based scraper** within an AWS Lambda function (`vapor-source/backend/swift/vapor-client`) using the `Kanna` library for HTML parsing.
 *   **AI-Powered Job Data Enrichment:** The Swift Lambda client utilizes the OpenAI API to parse raw job descriptions, extracting structured information such as:
     *   Minimum degree and years of experience
