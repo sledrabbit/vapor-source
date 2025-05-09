@@ -95,6 +95,32 @@ public func configure(_ app: Application) async throws {
   app.migrations.add(CreateJobLanguagePivot())
   app.migrations.add(CreateJobTechnologyPivot())
 
+  do {
+    app.logger.info("Checking if migrations need to be run...")
+    let sql =
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'jobs' AND table_schema = 'public')"
+    let rows = try await (app.db as! SQLDatabase).raw(SQLQueryString(sql)).all()
+    let tableExists = try rows.first?.decode(column: "exists", as: Bool.self) ?? false
+
+    if !tableExists {
+      app.logger.notice("'jobs' table not found. Running migrations...")
+      try await app.autoMigrate()
+      app.logger.notice("Migrations completed successfully.")
+    } else {
+      app.logger.info("Database tables already exist. Skipping migrations.")
+    }
+  } catch {
+    app.logger.error("Error checking database or running migrations: \(String(reflecting: error))")
+    app.logger.warning("Attempting to run migrations anyway as a fallback...")
+
+    do {
+      try await app.autoMigrate()
+      app.logger.notice("Fallback migrations completed.")
+    } catch let migrationError {
+      app.logger.critical("Failed to run migrations: \(String(reflecting: migrationError))")
+    }
+  }
+
   try routes(app)
 
   app.middleware.use(FileMiddleware(publicDirectory: app.directory.publicDirectory))
