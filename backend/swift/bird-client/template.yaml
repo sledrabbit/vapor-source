@@ -1,0 +1,59 @@
+# AWS SAM CLI template for local testing
+# run `docker compose up -d` in root dir
+# run the following in the bird-client root:
+# `sam build --use-container`
+# `sam local invoke BirdClientFunction --event event.json --env-vars env.json`
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  bird-client
+  Sample SAM Template for bird-client Swift Lambda
+
+Globals:
+  Function:
+    Timeout: 900
+
+Resources:
+  BirdClientFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BirdClientLambda
+      CodeUri: .
+      Handler: bird-client
+      Runtime: provided.al2
+      Architectures:
+        - arm64
+      MemorySize: 512
+      Environment:
+        Variables:
+          QUERY: "software engineer"
+          DEBUG_OUTPUT: "true"
+          API_DRY_RUN: "true"
+          LLM_PROMPT_PATH: "/var/task/prompt.txt"
+          OPENAI_API_KEY: "" # Ensure this is set in env.json or actual environment for real runs
+          API_SERVER_URL: "http://host.docker.internal:8080/api"
+          # OPENAI_BASE_URL: "https://api.openai.com/v1/chat/completions"
+          # OPENAI_MODEL: "gpt-4.1-nano"
+          # SCRAPER_MAX_PAGES: "2"
+          # SCRAPER_BASE_URL: "https://www.worksourcewa.com/"
+          # PARSER_MAX_CONCURRENT_TASKS: "5"
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /jobs
+            Method: post
+    Metadata:
+      BuildMethod: makefile
+      BuildImage: vapor-source/swift-builder:al2-arm64
+
+Outputs:
+  BirdClientApi:
+    Description: "API Gateway endpoint URL for Prod stage for Bird Client function"
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/jobs"
+  BirdClientFunction:
+    Description: "Bird Client Lambda Function ARN"
+    Value: !GetAtt BirdClientFunction.Arn
+  BirdClientFunctionIamRole:
+    Description: "Implicit IAM Role created for Bird Client function"
+    Value: !GetAtt BirdClientFunctionRole.Arn
