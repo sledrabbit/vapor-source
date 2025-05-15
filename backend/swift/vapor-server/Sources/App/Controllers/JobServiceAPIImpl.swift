@@ -72,12 +72,26 @@ struct JobServiceAPIImpl: APIProtocol {
   }
 
   private func findOrCreateLanguage(named name: String) async throws -> Language {
-    if let existing = try await Language.query(on: self.app.db).filter(\.$name == name).first() {
+    let normalizedName = name.lowercased()
+    if let existing = try await Language.query(on: self.app.db)
+      .filter(\.$name == normalizedName)
+      .first()
+    {
       return existing
-    } else {
-      let language = Language(name: name)
+    }
+
+    let language = Language(name: normalizedName)
+    do {
       try await language.save(on: self.app.db)
       return language
+    } catch {
+      if let existing = try await Language.query(on: self.app.db)
+        .filter(\.$name == normalizedName)
+        .first()
+      {
+        return existing
+      }
+      throw error
     }
   }
 
@@ -93,12 +107,26 @@ struct JobServiceAPIImpl: APIProtocol {
   }
 
   private func findOrCreateTechnology(named name: String) async throws -> Technology {
-    if let existing = try await Technology.query(on: self.app.db).filter(\.$name == name).first() {
+    let normalizedName = name.lowercased()
+    if let existing = try await Technology.query(on: self.app.db)
+      .filter(\.$name == normalizedName)
+      .first()
+    {
       return existing
-    } else {
-      let technology = Technology(name: name)
+    }
+
+    let technology = Technology(name: normalizedName)
+    do {
       try await technology.save(on: self.app.db)
       return technology
+    } catch {
+      if let existing = try await Technology.query(on: self.app.db)
+        .filter(\.$name == normalizedName)
+        .first()
+      {
+        return existing
+      }
+      throw error
     }
   }
 }
