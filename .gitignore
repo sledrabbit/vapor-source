@@ -1,8 +1,10 @@
-backend/swift/.DS_Store
+.DS_Store
 .vscode/launch.json
 *.html
 .env
-backend/go/*
+.github
 .terraform
 terraform.tfvars
 .build/
+backend/java/
+*.tfstate*
