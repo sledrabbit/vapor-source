@@ -5,11 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"gopher-source/config"
@@ -27,11 +24,8 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// listen for SIGTERM (and SIGINT) signals
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
 
 	// initialize clients
 	openaiService := services.NewOpenAIService()
