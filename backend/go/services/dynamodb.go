@@ -1,12 +1,14 @@
 package services
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"gopher-source/models"
 	"gopher-source/utils"
 	"log"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -20,6 +22,8 @@ import (
 type DynamoDBClient interface {
 	CreateJobsTable(ctx context.Context) error
 	PutJob(ctx context.Context, job *models.Job) error
+	GetAllJobIds(ctx context.Context) (map[string]bool, error)
+	WriteJobIdsToFile(filename string, keySet map[string]bool) error
 }
 
 type dynamoDBClientImpl struct {
@@ -127,5 +131,61 @@ func (d *dynamoDBClientImpl) PutJob(ctx context.Context, job *models.Job) error 
 		return fmt.Errorf("failed to put item: %w", err)
 	}
 	utils.Debug("\t📦 Post successful: for job")
+	return nil
+}
+
+func (d *dynamoDBClientImpl) GetAllJobIds(ctx context.Context) (map[string]bool, error) {
+	jobIds := make(map[string]bool)
+
+	proj := expression.NamesList(expression.Name("JobId"))
+	expr, err := expression.NewBuilder().WithProjection(proj).Build()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build expression: %w", err)
+	}
+
+	input := &dynamodb.ScanInput{
+		TableName:                aws.String(d.tableName),
+		ProjectionExpression:     expr.Projection(),
+		ExpressionAttributeNames: expr.Names(),
+	}
+
+	paginator := dynamodb.NewScanPaginator(d.client, input)
+
+	for paginator.HasMorePages() {
+		output, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan table: %w", err)
+		}
+
+		for _, item := range output.Items {
+			if jobId, exists := item["JobId"]; exists {
+				if jobIdStr := jobId.(*types.AttributeValueMemberS); jobIdStr != nil {
+					jobIds[jobIdStr.Value] = true
+				}
+			}
+		}
+	}
+	utils.Debug(fmt.Sprintf("📊 Retrieved %d job IDs from DynamoDB", len(jobIds)))
+	return jobIds, nil
+}
+
+func (d *dynamoDBClientImpl) WriteJobIdsToFile(filename string, keySet map[string]bool) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		fmt.Printf("failed to create file %v", err)
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	for key := range keySet {
+		_, err := writer.WriteString(string(key) + "\n")
+		if err != nil {
+			fmt.Printf("failed to write key to file %v", err)
+		}
+	}
+	err = writer.Flush()
+	if err != nil {
+		fmt.Printf("failed to flush writer: %v\n", err)
+	}
 	return nil
 }

@@ -18,6 +18,7 @@ type Config struct {
 	ApiDryRun      string
 	MaxConcurrency int
 	DefaultQuery   string
+	Filename       string
 }
 
 func Load() (*Config, error) {
@@ -55,5 +56,6 @@ func Load() (*Config, error) {
 		ApiDryRun:      apiDryRun,
 		MaxConcurrency: 25,
 		DefaultQuery:   "software developer",
+		Filename:       "job-ids.txt",
 	}, nil
 }

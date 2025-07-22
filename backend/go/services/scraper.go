@@ -18,6 +18,7 @@ import (
 
 type ScraperClient interface {
 	ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job)
+	GetProcessedIDs() map[string]bool
 }
 
 type scraperClientImpl struct {
@@ -34,6 +35,15 @@ func NewScraper(config config.Config, debugEnabled bool) ScraperClient {
 		processedIDs: make(map[string]bool),
 	}
 }
+
+func NewScraperWithKeyset(config config.Config, debugEnabled bool, existingKeySet map[string]bool) ScraperClient {
+	return &scraperClientImpl{
+		config:       config,
+		debugEnabled: debugEnabled,
+		processedIDs: existingKeySet,
+	}
+}
+
 func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job) {
 	defer close(jobsChan)
 
@@ -225,6 +235,17 @@ func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsCh
 	detailsCollector.Wait()
 
 	utils.Debug("🏁 Scraping complete.")
+}
+
+func (s *scraperClientImpl) GetProcessedIDs() map[string]bool {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	res := make(map[string]bool, len(s.processedIDs))
+	for key := range s.processedIDs {
+		res[key] = true
+	}
+	return res
 }
 
 func (s *scraperClientImpl) buildURL(query string, page int) string {

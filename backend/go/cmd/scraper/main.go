@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,9 +39,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create DynamoDB table: %v", err)
 	}
+	// TODO: replace local file with S3
+	keySet, err := readKeysFromFile(cfg.Filename)
+	if err != nil {
+		fmt.Printf("Error reading file with JobIds %v", err)
+	}
+	utils.Debug(fmt.Sprintf("INITIAL JobIds Length: %d", len(keySet)))
 	openaiService := services.NewOpenAIService()
 	parser := services.NewParserService(openaiService)
-	scraper := services.NewScraper(*cfg, true)
+	scraper := services.NewScraperWithKeyset(*cfg, true, keySet)
 
 	// setup concurrency
 	jobsChan := make(chan models.Job)
@@ -56,6 +64,11 @@ func main() {
 	utils.Debug(fmt.Sprintf("🚀 Starting job scraping for '%s' with max pages set to %d", cfg.DefaultQuery, cfg.MaxPages))
 	scraper.ScrapeJobs(ctx, cfg.DefaultQuery, jobsChan)
 	processingWg.Wait()
+
+	// TODO: replace local file with S3
+	keySet = scraper.GetProcessedIDs()
+	dynamoService.WriteJobIdsToFile(cfg.Filename, keySet)
+	utils.Debug(fmt.Sprintf("END JobIds Length: %d", len(keySet)))
 
 	executionTime := time.Since(startTime)
 
@@ -130,4 +143,25 @@ func mockParse(job models.Job) {
 	enhancedJob.Languages = []models.Language{{Name: "Go"}, {Name: "Python"}}
 	enhancedJob.Technologies = []models.Technology{{Name: "Docker"}, {Name: "Kubernetes"}}
 	mockPost(enhancedJob)
+}
+
+func readKeysFromFile(filename string) (map[string]bool, error) {
+	keySet := make(map[string]bool)
+
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Printf("failure to open file %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		keySet[line] = true
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("error reading file: %v", err)
+	}
+	return keySet, nil
 }
