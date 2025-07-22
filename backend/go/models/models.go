@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"sync/atomic"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
 type Job struct {
@@ -26,6 +29,14 @@ type Job struct {
 	Languages                 []Language   `json:"languages,omitempty"`
 	Technologies              []Technology `json:"technologies,omitempty"`
 	IsSoftwareEngineerRelated bool         `json:"IsSoftwareEngineerRelated"`
+}
+
+func (j *Job) ToDynamoDBItem() (map[string]types.AttributeValue, error) {
+	item, err := attributevalue.MarshalMap(j)
+	if err != nil {
+		panic(err)
+	}
+	return item, nil
 }
 
 type Language struct {

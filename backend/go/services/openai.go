@@ -65,7 +65,7 @@ func (o *openaiClientImpl) UnmarshalResponse(responseText string) (models.OpenAI
 
 func (o *openaiClientImpl) executeWithRetry(ctx context.Context, operation func() (openai.ChatCompletion, error)) (openai.ChatCompletion, error) {
 	maxRetries := 10
-	baseDelay := 500 * time.Millisecond
+	baseDelay := 1000 * time.Millisecond
 	maxDelay := 10 * time.Second
 
 	for i := 0; i < maxRetries; i++ {
@@ -85,7 +85,7 @@ func (o *openaiClientImpl) executeWithRetry(ctx context.Context, operation func(
 		}
 		return result, nil
 	}
-	return openai.ChatCompletion{}, fmt.Errorf("max retries (%d) reached for rate limiting", maxRetries)
+	return openai.ChatCompletion{}, fmt.Errorf("\t❌ Max retry attempts of %d reached. Operation failed.", maxRetries)
 }
 
 func generateSchema[T any]() interface{} {

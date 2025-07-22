@@ -48,32 +48,6 @@ func (p *parserClientImpl) ParseWithStats(ctx context.Context, job *models.Job) 
 }
 
 func populateJobFromResponse(job *models.Job, res models.OpenAIJobParsingResponse) {
-	if res.MinYearsExperience == 0 {
-		utils.Debug("\t📋 Entry Level Job Details - ")
-		utils.Debug(fmt.Sprintf("\t   Job Id: %s", job.JobId))
-		utils.Debug(fmt.Sprintf("\t   Job Title: %s", job.Title))
-		utils.Debug(fmt.Sprintf("\t   Deadline Date: %s", res.DeadlineDate))
-		utils.Debug(fmt.Sprintf("\t   Minimum Degree: %s", res.MinDegree))
-		utils.Debug(fmt.Sprintf("\t   Minimum Years Experience: %d", res.MinYearsExperience))
-		utils.Debug(fmt.Sprintf("\t   Modality: %s", res.Modality))
-		utils.Debug(fmt.Sprintf("\t   Domain: %s", res.Domain))
-		utils.Debug(fmt.Sprintf("\t   URL: %s", job.URL))
-
-		if len(res.Languages) > 0 {
-			utils.Debug("\t   Languages:")
-			for _, lang := range res.Languages {
-				utils.Debug(fmt.Sprintf("\t     - %s", lang))
-			}
-		}
-
-		if len(res.Technologies) > 0 {
-			utils.Debug("\t   Technologies:")
-			for _, tech := range res.Technologies {
-				utils.Debug(fmt.Sprintf("\t     - %s", tech))
-			}
-		}
-	}
-
 	if res.IsSoftwareEngineerRelated == false {
 		utils.Debug(fmt.Sprintf("\t🦉 Filtering out non-software related job (based on AI response): %s", job.Title))
 	}

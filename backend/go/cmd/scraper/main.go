@@ -28,6 +28,15 @@ func main() {
 	defer cancel()
 
 	// initialize clients
+	awsConfig, err := services.NewDynamoConfig(ctx)
+	if err != nil {
+		fmt.Printf("failed to load aws config %v", err)
+	}
+	dynamoService := services.NewDynamoService(awsConfig, "Jobs")
+	err = dynamoService.CreateJobsTable(ctx)
+	if err != nil {
+		log.Fatalf("Failed to create DynamoDB table: %v", err)
+	}
 	openaiService := services.NewOpenAIService()
 	parser := services.NewParserService(openaiService)
 	scraper := services.NewScraper(*cfg, true)
@@ -40,7 +49,7 @@ func main() {
 
 	go func() {
 		defer processingWg.Done()
-		processAndSendJobs(ctx, jobsChan, stats, *cfg, parser)
+		processAndSendJobs(ctx, jobsChan, stats, *cfg, parser, dynamoService)
 	}()
 
 	// scrape
@@ -54,7 +63,8 @@ func main() {
 	stats.PrintSummary(executionTime)
 }
 
-func processAndSendJobs(ctx context.Context, jobsChan <-chan models.Job, stats *models.JobStats, cfg config.Config, parser services.ParserClient) {
+func processAndSendJobs(ctx context.Context, jobsChan <-chan models.Job, stats *models.JobStats, cfg config.Config,
+	parser services.ParserClient, dynamoService services.DynamoDBClient) {
 	// semaphore to limit concurrency
 	sem := make(chan struct{}, cfg.MaxConcurrency)
 	var wg sync.WaitGroup
@@ -85,7 +95,13 @@ func processAndSendJobs(ctx context.Context, jobsChan <-chan models.Job, stats *
 				if enhancedJob.IsSoftwareEngineerRelated == false {
 					atomic.AddInt64(&stats.UnrelatedJobs, 1)
 				}
-				mockPost(*enhancedJob)
+				err := dynamoService.PutJob(ctx, enhancedJob)
+				if err != nil {
+					log.Printf("Failed to put job to DynamoDB: %v", err)
+				}
+				if cfg.ApiDryRun == "true" {
+					mockPost(*enhancedJob)
+				}
 			}
 		}(job)
 	}

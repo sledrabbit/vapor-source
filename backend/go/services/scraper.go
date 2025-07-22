@@ -124,7 +124,12 @@ func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsCh
 			re := regexp.MustCompile(`Posted:\s*(.+?)\s*-`)
 			matches := re.FindStringSubmatch(dateText)
 			if len(matches) > 1 {
-				job.PostedDate = strings.TrimSpace(matches[1])
+				dateStr := strings.TrimSpace(matches[1])
+				if parsedDate, err := time.Parse("1/2/2006", dateStr); err == nil {
+					job.PostedDate = parsedDate.Format("2006-01-02")
+				} else {
+					job.PostedDate = dateStr
+				}
 			}
 		}
 		if job.PostedDate == "" {
