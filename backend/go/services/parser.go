@@ -66,19 +66,8 @@ func populateJobFromResponse(job *models.Job, res models.OpenAIJobParsingRespons
 		job.Domain = res.Domain
 	}
 
-	for _, langName := range res.Languages {
-		lang := models.Language{
-			Name: langName,
-		}
-		job.Languages = append(job.Languages, lang)
-	}
-
-	for _, techName := range res.Technologies {
-		tech := models.Technology{
-			Name: techName,
-		}
-		job.Technologies = append(job.Technologies, tech)
-	}
+	job.Languages = res.Languages
+	job.Technologies = res.Technologies
 
 	utils.Debug(fmt.Sprintf("\t🤖 Analyzing job: %s/", job.Title))
 }

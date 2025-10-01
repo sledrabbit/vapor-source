@@ -10,25 +10,25 @@ import (
 )
 
 type Job struct {
-	ID                        uint         `json:"id,omitempty"`
-	JobId                     string       `json:"jobId"`
-	Title                     string       `json:"title"`
-	Company                   string       `json:"company"`
-	Location                  string       `json:"location"`
-	Modality                  string       `json:"modality,omitempty"`
-	PostedDate                string       `json:"postedDate"`
-	ExpiresDate               string       `json:"expiresDate,omitempty"`
-	Salary                    string       `json:"salary"`
-	URL                       string       `json:"url"`
-	MinYearsExperience        int          `json:"minYearsExperience,omitempty"`
-	MinDegree                 string       `json:"minDegree,omitempty"`
-	Domain                    string       `json:"domain,omitempty"`
-	Description               string       `json:"description"`
-	ParsedDescription         string       `json:"parsedDescription,omitempty"`
-	S3Pointer                 string       `json:"s3Pointer,omitempty"`
-	Languages                 []Language   `json:"languages,omitempty"`
-	Technologies              []Technology `json:"technologies,omitempty"`
-	IsSoftwareEngineerRelated bool         `json:"IsSoftwareEngineerRelated"`
+	ID                        uint     `json:"id,omitempty"`
+	JobId                     string   `json:"jobId"`
+	Title                     string   `json:"title"`
+	Company                   string   `json:"company"`
+	Location                  string   `json:"location"`
+	Modality                  string   `json:"modality,omitempty"`
+	PostedDate                string   `json:"postedDate"`
+	ExpiresDate               string   `json:"expiresDate,omitempty"`
+	Salary                    string   `json:"salary"`
+	URL                       string   `json:"url"`
+	MinYearsExperience        int      `json:"minYearsExperience,omitempty"`
+	MinDegree                 string   `json:"minDegree,omitempty"`
+	Domain                    string   `json:"domain,omitempty"`
+	Description               string   `json:"description"`
+	ParsedDescription         string   `json:"parsedDescription,omitempty"`
+	S3Pointer                 string   `json:"s3Pointer,omitempty"`
+	Languages                 []string `json:"languages,omitempty"`
+	Technologies              []string `json:"technologies,omitempty"`
+	IsSoftwareEngineerRelated bool     `json:"IsSoftwareEngineerRelated"`
 }
 
 func (j *Job) ToDynamoDBItem() (map[string]types.AttributeValue, error) {
@@ -37,14 +37,6 @@ func (j *Job) ToDynamoDBItem() (map[string]types.AttributeValue, error) {
 		panic(err)
 	}
 	return item, nil
-}
-
-type Language struct {
-	Name string `json:"name"`
-}
-
-type Technology struct {
-	Name string `json:"name"`
 }
 
 // OpenAI Structured Outputs response schema

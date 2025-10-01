@@ -140,8 +140,8 @@ func mockParse(job models.Job) {
 	enhancedJob.MinYearsExperience = 3
 	enhancedJob.Modality = "Remote"
 	enhancedJob.Domain = "Software Development"
-	enhancedJob.Languages = []models.Language{{Name: "Go"}, {Name: "Python"}}
-	enhancedJob.Technologies = []models.Technology{{Name: "Docker"}, {Name: "Kubernetes"}}
+	enhancedJob.Languages = []string{"Go", "Python"}
+	enhancedJob.Technologies = []string{"Docker", "Kubernetes"}
 	mockPost(enhancedJob)
 }
 
