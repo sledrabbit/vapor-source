@@ -44,7 +44,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error reading file with JobIds %v", err)
 	}
-	utils.Debug(fmt.Sprintf("INITIAL JobIds Length: %d", len(keySet)))
+	keySetInitialSize := len(keySet)
 	openaiService := services.NewOpenAIService()
 	parser := services.NewParserService(openaiService)
 	scraper := services.NewScraperWithKeyset(*cfg, true, keySet)
@@ -68,7 +68,8 @@ func main() {
 	// TODO: replace local file with S3
 	keySet = scraper.GetProcessedIDs()
 	dynamoService.WriteJobIdsToFile(cfg.Filename, keySet)
-	utils.Debug(fmt.Sprintf("END JobIds Length: %d", len(keySet)))
+	keySetFinalSize := len(keySet)
+	utils.Debug(fmt.Sprintf("💰Jobs added to cache: %d", keySetFinalSize-keySetInitialSize))
 
 	executionTime := time.Since(startTime)
 
@@ -150,7 +151,14 @@ func readKeysFromFile(filename string) (map[string]bool, error) {
 
 	file, err := os.Open(filename)
 	if err != nil {
-		fmt.Printf("failure to open file %v", err)
+		if os.IsNotExist(err) {
+			file, err = os.Create(filename)
+			if err != nil {
+				return keySet, fmt.Errorf("failed to create file: %v", err)
+			}
+			return keySet, nil
+		}
+		return keySet, fmt.Errorf("failure to open file: %v", err)
 	}
 	defer file.Close()
 
