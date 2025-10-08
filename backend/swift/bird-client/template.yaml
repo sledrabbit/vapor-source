@@ -18,7 +18,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: BirdClientLambda
-      CodeUri: .
+      CodeUri: .build/plugins/AWSLambdaPackager/outputs/AWSLambdaPackager/bird-client/bird-client.zip
       Handler: bird-client
       Runtime: provided.al2
       Architectures:
