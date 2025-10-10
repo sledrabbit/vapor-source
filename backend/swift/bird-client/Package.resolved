@@ -1,13 +1,13 @@
 {
-  "originHash" : "0b168932b0e30cc68e8ce3ce77ca06b2c0645955a36b6050c4e9682883bf0e53",
+  "originHash" : "11ec40f61c866a02098ff29d21a27609275524724bea1ba0051e680e0b101335",
   "pins" : [
     {
       "identity" : "kanna",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tid-kijyun/Kanna.git",
       "state" : {
-        "revision" : "41c3d28ea0eac07e4551b28def9de1ede702e739",
-        "version" : "5.3.0"
+        "revision" : "a23a4584f8e7de07cab420ae4d51eee553dd988d",
+        "version" : "6.0.1"
       }
     },
     {

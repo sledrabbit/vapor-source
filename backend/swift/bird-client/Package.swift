@@ -1,4 +1,4 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -13,7 +13,7 @@ let package = Package(
       url: "https://github.com/swift-server/swift-aws-lambda-runtime.git", from: "1.0.0-alpha"
     ),
     .package(url: "https://github.com/swift-server/swift-aws-lambda-events.git", from: "1.0.0"),
-    .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "5.2.7"),
+    .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "6.0.1"),
   ],
   targets: [
     // Targets are the basic building blocks of a package, defining a module or a test suite.
