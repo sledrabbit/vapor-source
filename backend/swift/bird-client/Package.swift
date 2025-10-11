@@ -10,9 +10,9 @@ let package = Package(
   ],
   dependencies: [
     .package(
-      url: "https://github.com/swift-server/swift-aws-lambda-runtime.git", from: "1.0.0-alpha"
+      url: "https://github.com/swift-server/swift-aws-lambda-runtime.git", from: "2.1.0"
     ),
-    .package(url: "https://github.com/swift-server/swift-aws-lambda-events.git", from: "1.0.0"),
+    .package(url: "https://github.com/swift-server/swift-aws-lambda-events.git", from: "1.2.1"),
     .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "6.0.1"),
   ],
   targets: [

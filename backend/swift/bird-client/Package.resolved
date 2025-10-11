@@ -1,5 +1,5 @@
 {
-  "originHash" : "11ec40f61c866a02098ff29d21a27609275524724bea1ba0051e680e0b101335",
+  "originHash" : "319ea5af4ecd66fc0186b6088b2bf78d880480d83f76ddd1af4fb9f44fc8eac4",
   "pins" : [
     {
       "identity" : "kanna",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swift-server/swift-aws-lambda-events.git",
       "state" : {
-        "revision" : "0025b1a409aa4d3fe9900aff1339ac403343ccd5",
-        "version" : "1.0.0"
+        "revision" : "5aa3a6305864a2060b69f30cf3e24f4a2b5b16ba",
+        "version" : "1.2.1"
       }
     },
     {
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swift-server/swift-aws-lambda-runtime.git",
       "state" : {
-        "revision" : "5ecc24fa54e61756fe7a7a01f2451da1cffa916e",
-        "version" : "1.0.0-alpha.3"
+        "revision" : "461c18af6f944f6324fcf21cd4ce8ac12f38d66b",
+        "version" : "2.1.0"
       }
     },
     {

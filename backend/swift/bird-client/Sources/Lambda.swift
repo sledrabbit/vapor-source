@@ -2,22 +2,17 @@ import AWSLambdaEvents
 import AWSLambdaRuntime
 import Foundation
 
-@main
-struct LambdaHandler: AWSLambdaRuntime.LambdaHandler {
+struct MyLambdaHandler: LambdaHandler {
   typealias Event = APIGatewayV2Request
   typealias Output = APIGatewayV2Response
 
-  let config: AppConfig
-
-  init(context: LambdaInitializationContext) throws {
-    context.logger.info("Lambda Handler Initialized.")
-
-    self.config = try AppConfig()
+  func handle(_ event: Event, context: LambdaContext) async throws
+    -> Output
+  {
+    let config = try AppConfig()
     context.logger.info("Configuration loaded successfully.")
     context.logger.info("Lambda Handler Initialized.")
-  }
 
-  func handle(_ event: Event, context: LambdaContext) async throws -> Output {
     let queryParams = event.queryStringParameters
     let jobQuery =
       queryParams["query"] ?? ProcessInfo.processInfo.environment["QUERY"] ?? "software engineer"
@@ -30,29 +25,21 @@ struct LambdaHandler: AWSLambdaRuntime.LambdaHandler {
 
     context.logger.info("Starting job processing with query: \(jobQuery)")
 
-    do {
-      let runner = try AppRunner(config: config, logger: context.logger)
-      await runner.run()
-      let result = "Job processing completed successfully"
-      context.logger.info("\(result)")
+    let runner = try AppRunner(config: config, logger: context.logger)
+    await runner.run()
+    let result = "Job processing completed successfully"
+    context.logger.info("\(result)")
 
-      return Output(
-        statusCode: .ok,
-        body: """
-          {
-            "message": "Job processing completed",
-            "query": "\(jobQuery)",
-            "debugMode": \(debugOutput),
-            "dryRunMode": \(apiDryRun)
-          }
-          """
-      )
-    } catch {
-      context.logger.error("Error in job processing: \(error)")
-      return Output(
-        statusCode: .internalServerError,
-        body: "Processing failed: \(error.localizedDescription)"
-      )
-    }
+    return Output(
+      statusCode: .ok,
+      body: """
+        {
+          "message": "Job processing completed",
+          "query": "\(jobQuery)",
+          "debugMode": \(debugOutput),
+          "dryRunMode": \(apiDryRun)
+        }
+        """
+    )
   }
 }
