@@ -1,10 +1,9 @@
 .DS_Store
-.vscode/launch.json
+.vscode
 *.html
 .env
 .github
 .terraform
 terraform.tfvars
 .build/
-backend/java/
 *.tfstate*
