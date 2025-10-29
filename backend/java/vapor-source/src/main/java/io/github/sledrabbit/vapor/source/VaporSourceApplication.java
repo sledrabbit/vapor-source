@@ -14,7 +14,7 @@ public class VaporSourceApplication {
         return "Hello, world!";
     }
 
-	void main(String[] args) {
+	public static void main(String[] args) {
 		SpringApplication.run(VaporSourceApplication.class, args);
 	}
 
