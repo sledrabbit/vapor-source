@@ -11,29 +11,6 @@ protocol AIMessaging: Sendable {
   func sendMessage(prompt: String, content: String) async throws -> AIResponse
 }
 
-protocol JobPosting: Sendable {
-  func postJob(_ job: APIJob, to url: URL) async throws -> (Int, Data?)
-}
-
-extension URLSession: JobPosting {
-  func postJob(_ job: APIJob, to url: URL) async throws -> (Int, Data?) {
-    let jsonData = try JSONEncoder().encode(job)
-
-    var request = URLRequest(url: url)
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = jsonData
-
-    let (data, response) = try await data(for: request)
-
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw URLError(.badServerResponse)
-    }
-
-    return (httpResponse.statusCode, data)
-  }
-}
-
 struct AIResponse: Decodable {
   let content: String?
 }
@@ -55,32 +32,29 @@ struct Parser: Sendable {
   let config: AppConfig
   let logger: Logger
   let aiMessenger: AIMessaging
-  let jobPoster: JobPosting
 
   init(
     jobStream: AsyncStream<Job>,
     prompt: String,
     config: AppConfig,
     logger: Logger,
-    aiMessenger: AIMessaging? = nil,
-    jobPoster: JobPosting? = nil
+    aiMessenger: AIMessaging? = nil
   ) {
     self.jobStream = jobStream
     self.prompt = prompt
     self.config = config
     self.logger = logger
     self.aiMessenger = aiMessenger ?? OpenAIClient(config: config)
-    self.jobPoster = jobPoster ?? URLSession.shared
   }
 }
 
 // MARK: - Public API
 
 extension Parser {
-  func parseAndPost() async {
+  func parseJobs() async -> [Job] {
     let limiter = ConcurrencyLimiter(limit: config.parserMaxConcurrentTasks)
 
-    await withTaskGroup(of: Void.self) { group in
+    return await withTaskGroup(of: Job?.self) { group -> [Job] in
       for await job in jobStream {
         await limiter.wait()
 
@@ -91,16 +65,24 @@ extension Parser {
 
           do {
             if let processedJob = try await self.processJob(job) {
-              await self.postSingleJob(processedJob)
+              return processedJob
             } else {
               self.debug("\t🦉 Filtering out or failed to parse job: \(job.title)")
+              return nil
             }
           } catch {
             self.logger.error("Error processing job \(job.jobId): \(error)")
+            return nil
           }
         }
       }
-      await group.waitForAll()
+      var parsedJobs: [Job] = []
+      while let result = await group.next() {
+        if let job = result {
+          parsedJobs.append(job)
+        }
+      }
+      return parsedJobs
     }
   }
 }
@@ -179,46 +161,6 @@ extension Parser {
       logger.error("JSON Parsing error: \(error)")
       logger.error("Failed to parse JSON: \(content)")
       return nil
-    }
-  }
-}
-
-// MARK: - Job Posting
-
-extension Parser {
-  private func postSingleJob(_ job: Job) async {
-    if config.apiDryRun {
-      debug("\t🧪 DEV MODE: Simulating server POST for job: \(job.title)")
-      return
-    }
-
-    do {
-      guard let serverUrl = URL(string: config.apiServerURL) else {
-        logger.error("❌ Invalid API Server URL: \(config.apiServerURL)")
-        return
-      }
-
-      let apiJobPayload = job.toAPIModel()
-
-      let (statusCode, _) = try await jobPoster.postJob(apiJobPayload, to: serverUrl)
-
-      switch statusCode {
-      case 201:
-        debug("\t📦 Post successful (201 Created): \(job.title)")
-      case 200:
-        debug("\t📦 Post successful (200 OK): \(job.title)")
-      case 409:
-        debug("\t🟡 Duplicate job (409 Conflict - skipped): \(job.title)")
-      case 400:
-        logger.error(
-          "❌ Bad request (400) for job \(job.jobId) - invalid input provided. Check payload.")
-      case 500...599:
-        logger.error("🔥 Server error (\(statusCode)) for job \(job.jobId).")
-      default:
-        logger.warning("⚠️ Unexpected response status code: \(statusCode) for job \(job.jobId)")
-      }
-    } catch {
-      logger.error("Error sending job \(job.jobId) to API: \(error)")
     }
   }
 }

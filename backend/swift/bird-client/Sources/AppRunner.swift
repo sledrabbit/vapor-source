@@ -14,15 +14,26 @@ class AppRunner {
 
   func run() async {
     let startTime = Date()
+    let jobStream: AsyncStream<Job>
 
-    let scrapedJobStream = scraper.scrapeJobs(query: config.jobQuery)
+    if config.useMockJobs {
+      logger.info("\t🧪 MOCK MODE: Using static mock jobs instead of scraping")
+      jobStream = AsyncStream { continuation in
+        for job in MockData.jobs {
+          continuation.yield(job)
+        }
+        continuation.finish()
+      }
+    } else {
+      jobStream = scraper.scrapeJobs(query: config.jobQuery)
+    }
 
     let parser: Parser
     do {
 
       let promptContent = try String(contentsOfFile: config.promptPath, encoding: .utf8)
       parser = Parser(
-        jobStream: scrapedJobStream,
+        jobStream: jobStream,
         prompt: promptContent,
         config: config,
         logger: logger
@@ -32,7 +43,9 @@ class AppRunner {
       return
     }
 
-    await parser.parseAndPost()
+    let parsedJobs = await parser.parseJobs()
+    logger.info(
+      "Parsed \(parsedJobs.count) jobs. Posting is disabled for now.")
 
     let executionTime = Date().timeIntervalSince(startTime)
     debug("Job processing completed in \(String(format: "%.2f", executionTime)) seconds")

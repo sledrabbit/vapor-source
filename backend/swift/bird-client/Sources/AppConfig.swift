@@ -4,6 +4,7 @@ struct AppConfig {
   let jobQuery: String
   let debugOutput: Bool
   let apiDryRun: Bool
+  let useMockJobs: Bool
   let promptPath: String
 
   let openAIApiKey: String
@@ -15,7 +16,6 @@ struct AppConfig {
   let scraperRequestDelay: TimeInterval
 
   let parserMaxConcurrentTasks: Int
-  let apiServerURL: String  // URL for the Vapor backend
 
   init() throws {
     func getRequiredEnvVar(_ key: String) throws -> String {
@@ -46,6 +46,7 @@ struct AppConfig {
     self.jobQuery = getEnvVar("QUERY", default: "software engineer")
     self.debugOutput = getEnvVarAsBool("DEBUG_OUTPUT", default: false)
     self.apiDryRun = getEnvVarAsBool("API_DRY_RUN", default: false)
+    self.useMockJobs = getEnvVarAsBool("USE_MOCK_JOBS", default: false)
     self.promptPath = getEnvVar("LLM_PROMPT_PATH", default: "/var/task/prompt.txt")
 
     self.openAIApiKey = try getRequiredEnvVar("OPENAI_API_KEY")
@@ -58,7 +59,6 @@ struct AppConfig {
     self.scraperRequestDelay = getEnvVarAsTimeInterval("SCRAPER_REQUEST_DELAY", default: 1.0)
 
     self.parserMaxConcurrentTasks = getEnvVarAsInt("PARSER_MAX_CONCURRENT_TASKS", default: 5)
-    self.apiServerURL = try getRequiredEnvVar("API_SERVER_URL") + "api/jobs"
   }
 }
 

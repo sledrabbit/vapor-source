@@ -22,6 +22,9 @@ struct MyLambdaHandler: LambdaHandler {
     let apiDryRunString =
       queryParams["dryrun"] ?? ProcessInfo.processInfo.environment["API_DRY_RUN"] ?? "false"
     let apiDryRun = (apiDryRunString.lowercased() == "true" || apiDryRunString == "1")
+    let useMockJobsString =
+      queryParams["mock"] ?? ProcessInfo.processInfo.environment["USE_MOCK_JOBS"] ?? "false"
+    let useMockJobs = (useMockJobsString.lowercased() == "true" || useMockJobsString == "1")
 
     context.logger.info("Starting job processing with query: \(jobQuery)")
 
@@ -37,7 +40,8 @@ struct MyLambdaHandler: LambdaHandler {
           "message": "Job processing completed",
           "query": "\(jobQuery)",
           "debugMode": \(debugOutput),
-          "dryRunMode": \(apiDryRun)
+          "dryRunMode": \(apiDryRun),
+          "useMockJobs": \(useMockJobs)
         }
         """
     )
