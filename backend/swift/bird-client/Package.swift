@@ -9,9 +9,7 @@ let package = Package(
     .macOS(.v15)
   ],
   dependencies: [
-    .package(
-      url: "https://github.com/swift-server/swift-aws-lambda-runtime.git", from: "2.1.0"
-    ),
+    .package(url: "https://github.com/awslabs/swift-aws-lambda-runtime.git", from: "2.4.0"),
     .package(url: "https://github.com/swift-server/swift-aws-lambda-events.git", from: "1.2.1"),
     .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "6.0.1"),
   ],
