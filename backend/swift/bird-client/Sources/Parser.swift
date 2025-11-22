@@ -8,7 +8,7 @@ import Logging
 // MARK: - Dependencies
 
 protocol AIMessaging: Sendable {
-  func sendMessage(prompt: String, content: String) async throws -> AIResponse
+  func sendMessage(content: String) async throws -> AIResponse
 }
 
 struct AIResponse: Decodable {
@@ -21,27 +21,25 @@ struct AIParseResponse: Decodable {
   let MinYearsExperience: Int
   let Modality: String
   let Domain: String
-  let Languages: [Language]
-  let Technologies: [Technology]
+  let Languages: [String]
+  let Technologies: [String]
+  let DeadlineDate: String
   let IsSoftwareEngineerRelated: Bool
 }
 
 struct Parser: Sendable {
   let jobStream: AsyncStream<Job>
-  let prompt: String
   let config: AppConfig
   let logger: Logger
   let aiMessenger: AIMessaging
 
   init(
     jobStream: AsyncStream<Job>,
-    prompt: String,
     config: AppConfig,
     logger: Logger,
     aiMessenger: AIMessaging? = nil
   ) {
     self.jobStream = jobStream
-    self.prompt = prompt
     self.config = config
     self.logger = logger
     self.aiMessenger = aiMessenger ?? OpenAIClient(config: config)
@@ -104,19 +102,17 @@ extension Parser {
       updatedJob.minDegree = "Bachelor's"
       updatedJob.minYearsExperience = 3
       updatedJob.modality = "Remote"
-      updatedJob.domain = "Software Development"
+      updatedJob.domain = "Backend"
       updatedJob.languages = [Language(name: "Swift")]
       updatedJob.technologies = [Technology(name: "Vapor")]
 
       return updatedJob
     }
 
-    let finalPrompt = "\(prompt)\n\nJob description: \(job.description)"
-
     do {
       debug("\t🤖 Analyzing job: \(job.title)")
       let response = try await retryWithBackoff(logger: logger) {
-        try await aiMessenger.sendMessage(prompt: finalPrompt, content: job.description)
+        try await aiMessenger.sendMessage(content: job.description)
       }
 
       guard let content = response.content else {
@@ -153,8 +149,9 @@ extension Parser {
       updatedJob.minYearsExperience = parsedFields.MinYearsExperience
       updatedJob.modality = parsedFields.Modality
       updatedJob.domain = parsedFields.Domain
-      updatedJob.languages = parsedFields.Languages
-      updatedJob.technologies = parsedFields.Technologies
+      updatedJob.languages = parsedFields.Languages.map { Language(name: $0)}
+      updatedJob.technologies = parsedFields.Technologies.map { Technology(name: $0)}
+      updatedJob.expiresDate = parsedFields.DeadlineDate
 
       return updatedJob
     } catch {

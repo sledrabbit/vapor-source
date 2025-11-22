@@ -29,10 +29,8 @@ struct OpenAIClient: AIMessaging {
 }
 
 extension OpenAIClient {
-  func sendMessage(prompt: String, content: String) async throws -> AIResponse {
-    let fullMessage = prompt + " " + content
-
-    let request = try makeRequest(with: fullMessage)
+  func sendMessage(content: String) async throws -> AIResponse {
+    let request = try makeRequest(with: content)
     let response = try await performRequest(request)
 
     return AIResponse(content: response.content)
@@ -50,13 +48,18 @@ extension OpenAIClient {
     request.httpMethod = "POST"
     request.addValue("Bearer \(config.openAIApiKey)", forHTTPHeaderField: "Authorization")
     request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+    
+    let responseFormat: [String: Any] = [
+      "type": "json_schema",
+      "json_schema": Job.schema
+    ]
 
     let requestBody: [String: Any] = [
       "model": config.openAIModel,
       "messages": [
         ["role": "user", "content": message]
       ],
-      "response_format": ["type": "json_object"],
+      "response_format": responseFormat,
     ]
 
     request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)

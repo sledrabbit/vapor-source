@@ -5,7 +5,6 @@ struct AppConfig {
   let debugOutput: Bool
   let apiDryRun: Bool
   let useMockJobs: Bool
-  let promptPath: String
 
   let openAIApiKey: String
   let openAIBaseURL: String
@@ -47,7 +46,6 @@ struct AppConfig {
     self.debugOutput = getEnvVarAsBool("DEBUG_OUTPUT", default: false)
     self.apiDryRun = getEnvVarAsBool("API_DRY_RUN", default: false)
     self.useMockJobs = getEnvVarAsBool("USE_MOCK_JOBS", default: false)
-    self.promptPath = getEnvVar("LLM_PROMPT_PATH", default: "/var/task/prompt.txt")
 
     self.openAIApiKey = try getRequiredEnvVar("OPENAI_API_KEY")
     self.openAIBaseURL = getEnvVar(
@@ -58,7 +56,7 @@ struct AppConfig {
     self.scraperBaseUrl = getEnvVar("SCRAPER_BASE_URL", default: "https://www.worksourcewa.com/")
     self.scraperRequestDelay = getEnvVarAsTimeInterval("SCRAPER_REQUEST_DELAY", default: 1.0)
 
-    self.parserMaxConcurrentTasks = getEnvVarAsInt("PARSER_MAX_CONCURRENT_TASKS", default: 5)
+    self.parserMaxConcurrentTasks = getEnvVarAsInt("PARSER_MAX_CONCURRENT_TASKS", default: 25)
   }
 }
 

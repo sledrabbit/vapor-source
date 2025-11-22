@@ -28,20 +28,11 @@ class AppRunner {
       jobStream = scraper.scrapeJobs(query: config.jobQuery)
     }
 
-    let parser: Parser
-    do {
-
-      let promptContent = try String(contentsOfFile: config.promptPath, encoding: .utf8)
-      parser = Parser(
+    let parser = Parser(
         jobStream: jobStream,
-        prompt: promptContent,
         config: config,
         logger: logger
       )
-    } catch {
-      logger.error("Error initializing Parser or reading prompt: \(error)")
-      return
-    }
 
     let parsedJobs = await parser.parseJobs()
     logger.info(
