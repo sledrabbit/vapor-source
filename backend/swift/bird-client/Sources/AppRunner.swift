@@ -15,25 +15,7 @@ class AppRunner {
 
   func run() async {
     let startTime = Date()
-    let jobStream: AsyncStream<Job>
-
-    if config.useMockJobs {
-      logger.info("\t🧪 MOCK MODE: Using static mock jobs instead of scraping")
-      jobStream = AsyncStream { continuation in
-        for job in MockData.jobs {
-          continuation.yield(job)
-        }
-        continuation.finish()
-      }
-    } else {
-      jobStream = scraper.scrapeJobs(query: config.jobQuery)
-    }
-
-    let parser = Parser(
-      jobStream: jobStream,
-      config: config,
-      logger: logger
-    )
+    let jobStream = makeJobStream()
 
     debug(
       "\t🔧 DynamoDB config - region: \(config.awsRegion ?? "nil"), endpoint: \(config.dynamoDBEndPoint ?? "nil")"
@@ -45,9 +27,14 @@ class AppRunner {
         tableName: "Jobs",
         endpoint: config.dynamoDBEndPoint
       )
-      for await parsedJob in parser.parseJobs() {
-        await table.postJob(parsedJob, config: config, logger: logger)
-      }
+      let parser = Parser(config: config, logger: logger)
+      let processor = JobProcessor(
+        parser: parser,
+        table: table,
+        config: config,
+        logger: logger
+      )
+      await processor.run(jobStream: jobStream)
     } catch {
       logger.error("Failed to initialize DynamoDB table: \(error)")
       return
@@ -61,6 +48,19 @@ class AppRunner {
     if isEnabled {
       print(message)
     }
+  }
+
+  private func makeJobStream() -> AsyncStream<Job> {
+    if config.useMockJobs {
+      logger.info("\t🧪 MOCK MODE: Using static mock jobs instead of scraping")
+      return AsyncStream { continuation in
+        for job in MockData.jobs {
+          continuation.yield(job)
+        }
+        continuation.finish()
+      }
+    }
+    return scraper.scrapeJobs(query: config.jobQuery)
   }
 
 }

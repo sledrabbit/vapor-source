@@ -26,7 +26,7 @@ public struct DynamoDBTable {
     endpoint: String?
   ) async throws {
     do {
-      var config = try await DynamoDBClient.DynamoDBClientConfiguration()
+      let config = try await DynamoDBClient.DynamoDBClientConfiguration()
       if let region = region {
         config.region = region
       }
@@ -117,8 +117,8 @@ public struct DynamoDBTable {
     }
 
     do {
+      logger.info("\t📦 Posting: \(job.title)")
       try await putJob(job)
-      logger.info("\t📦 Post successful: \(job.title)")
     } catch {
       logger.error("❌ Failed to post job \(job.jobId): \(error)")
     }
@@ -146,3 +146,5 @@ public struct DynamoDBTable {
     }
   }
 }
+
+extension DynamoDBTable: @unchecked Sendable {}

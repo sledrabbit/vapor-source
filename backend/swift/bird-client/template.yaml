@@ -23,7 +23,7 @@ Resources:
       Runtime: provided.al2
       Architectures:
         - arm64
-      MemorySize: 512
+      MemorySize: 128
       Environment:
         Variables:
           QUERY: "software engineer"
@@ -41,6 +41,7 @@ Resources:
           # OPENAI_MODEL: "gpt-4.1-nano"
           # SCRAPER_MAX_PAGES: "2"
           # SCRAPER_BASE_URL: "https://www.worksourcewa.com/"
+          # SCRAPER_MAX_CONCURRENT_REQUESTS: "8"
           # PARSER_MAX_CONCURRENT_TASKS: "5"
       Events:
         ApiEvent:

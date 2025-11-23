@@ -12,7 +12,7 @@ struct AppConfig {
 
   let scraperMaxPages: Int
   let scraperBaseUrl: String
-  let scraperRequestDelay: TimeInterval
+  let scraperMaxConcurrentRequests: Int
 
   let parserMaxConcurrentTasks: Int
   let awsRegion: String?
@@ -56,7 +56,8 @@ struct AppConfig {
 
     self.scraperMaxPages = getEnvVarAsInt("SCRAPER_MAX_PAGES", default: 2)
     self.scraperBaseUrl = getEnvVar("SCRAPER_BASE_URL", default: "https://www.worksourcewa.com/")
-    self.scraperRequestDelay = getEnvVarAsTimeInterval("SCRAPER_REQUEST_DELAY", default: 1.0)
+    self.scraperMaxConcurrentRequests = getEnvVarAsInt(
+      "SCRAPER_MAX_CONCURRENT_REQUESTS", default: 25)
 
     self.parserMaxConcurrentTasks = getEnvVarAsInt("PARSER_MAX_CONCURRENT_TASKS", default: 25)
     self.awsRegion = getEnvVar("AWS_REGION", default: "us-west-2")

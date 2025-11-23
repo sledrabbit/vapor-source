@@ -28,59 +28,25 @@ struct AIParseResponse: Decodable {
 }
 
 struct Parser: Sendable {
-  let jobStream: AsyncStream<Job>
   let config: AppConfig
   let logger: Logger
   let aiMessenger: AIMessaging
 
   init(
-    jobStream: AsyncStream<Job>,
     config: AppConfig,
     logger: Logger,
     aiMessenger: AIMessaging? = nil
   ) {
-    self.jobStream = jobStream
     self.config = config
     self.logger = logger
     self.aiMessenger = aiMessenger ?? OpenAIClient(config: config)
   }
 }
 
-// MARK: - Public API
-
-extension Parser {
-  func parseJobs() -> AsyncStream<Job> {
-    return AsyncStream { continuation in
-      Task {
-        let limiter = ConcurrencyLimiter(limit: config.parserMaxConcurrentTasks)
-
-        await withTaskGroup(of: Void.self) { group in
-          for await job in jobStream {
-            await limiter.wait()
-
-            group.addTask {
-              defer { Task { await limiter.signal() } }
-
-              do {
-                if let processedJob = try await self.processJob(job) {
-                  continuation.yield(processedJob)
-                }
-              } catch {
-                self.logger.error("Error processing job \(job.jobId): \(error)")
-              }
-            }
-          }
-          await group.waitForAll()
-          continuation.finish()
-        }
-      }
-    }
-  }
-}
 // MARK: - Job Processing
 
 extension Parser {
-  private func processJob(_ job: Job) async throws -> Job? {
+  func parse(job: Job) async throws -> Job? {
     if config.apiDryRun {
       debug("\t🧪 DEV MODE: Simulating AI response for job: \(job.title)")
 

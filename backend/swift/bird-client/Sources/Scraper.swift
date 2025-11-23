@@ -226,11 +226,15 @@ extension Scraper {
     jobIds: inout Set<String>,
     continuation: AsyncStream<Job>.Continuation
   ) async {
+    let fetchLimit = max(1, config.scraperMaxConcurrentRequests)
+    let limiter = ConcurrencyLimiter(limit: fetchLimit)
     await withTaskGroup(of: Job?.self) { group -> Void in
       for (jobUrl, jobId) in jobLinks where !jobIds.contains(jobId) {
+        await limiter.wait()
         jobIds.insert(jobId)
 
         group.addTask { [self] in
+          defer { Task { await limiter.signal() } }
           do {
             let jobHtml = try await self.fetchPage(url: jobUrl)
             let document = try htmlParser.parseHtml(from: jobHtml)
