@@ -1,6 +1,7 @@
+import AWSDynamoDB
 import Foundation
 
-struct Job: Codable, Sendable {
+public struct Job: Codable, Sendable {
   var id: UInt?
   var jobId: String
   var title: String
@@ -21,12 +22,12 @@ struct Job: Codable, Sendable {
   var technologies: [Technology]?
 }
 
-struct Language: Codable, Sendable {
+public struct Language: Codable, Sendable {
   var id: UInt?
   var name: String
 }
 
-struct Technology: Codable, Sendable {
+public struct Technology: Codable, Sendable {
   var id: UInt?
   var name: String
 }
@@ -119,6 +120,75 @@ extension Job {
         APITechnology(id: tech.id.flatMap { Int($0) }, name: tech.name)
       }
     )
+  }
+
+  func getAsItem() async throws -> [Swift.String: DynamoDBClientTypes.AttributeValue] {
+    // build the item record, starting with required fields
+    var item: [Swift.String: DynamoDBClientTypes.AttributeValue] = [
+      "JobId": .s(self.jobId),
+      "Title": .s(self.title),
+      "Company": .s(self.company),
+      "Location": .s(self.location),
+      "PostedDate": .s(self.postedDate),
+      "Salary": .s(self.salary),
+      "Url": .s(self.url),
+      "Description": .s(self.description),
+    ]
+
+    // add optional fields if they're available
+    if let modality = self.modality {
+      item["Modality"] = .s(modality)
+    }
+    if let expiresDate = self.expiresDate {
+      item["ExpiresDate"] = .s(expiresDate)
+    }
+    if let minYearsExperience = self.minYearsExperience {
+      item["MinYearsExperience"] = .n(String(minYearsExperience))
+    }
+    if let minDegree = self.minDegree {
+      item["MinDegree"] = .s(minDegree)
+    }
+    if let domain = self.domain {
+      item["Domain"] = .s(domain)
+    }
+    if let parsedDescription = self.parsedDescription {
+      item["ParsedDescription"] = .s(parsedDescription)
+    }
+    if let s3Pointer = self.s3Pointer {
+      item["S3Pointer"] = .s(s3Pointer)
+    }
+    if let id = self.id {
+      item["Id"] = .n(String(id))
+    }
+
+    // add languages array if available
+    if let languages = self.languages {
+      let languageItems = languages.map { lang -> DynamoDBClientTypes.AttributeValue in
+        var langMap: [Swift.String: DynamoDBClientTypes.AttributeValue] = [
+          "name": .s(lang.name)
+        ]
+        if let id = lang.id {
+          langMap["id"] = .n(String(id))
+        }
+        return .m(langMap)
+      }
+      item["Languages"] = .l(languageItems)
+    }
+
+    // add technologies array if available
+    if let technologies = self.technologies {
+      let technologyItems = technologies.map { tech -> DynamoDBClientTypes.AttributeValue in
+        var techMap: [Swift.String: DynamoDBClientTypes.AttributeValue] = [
+          "name": .s(tech.name)
+        ]
+        if let id = tech.id {
+          techMap["id"] = .n(String(id))
+        }
+        return .m(techMap)
+      }
+      item["Technologies"] = .l(technologyItems)
+    }
+    return item
   }
 
   nonisolated(unsafe) static let schema: [String: Any] = [
