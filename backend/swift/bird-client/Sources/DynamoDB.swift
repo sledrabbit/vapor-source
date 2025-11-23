@@ -1,5 +1,7 @@
 import AWSDynamoDB
+import AWSSDKIdentity
 import Foundation
+import Logging
 
 enum DynamoDBError: Error {
   /// The specified table wasn't found or couldn't be created.
@@ -18,12 +20,26 @@ public struct DynamoDBTable {
   let ddbClient: DynamoDBClient
   let tableName: String
 
-  public init(region: String? = nil, tableName: String) async throws {
+  public init(
+    region: String? = nil,
+    tableName: String,
+    endpoint: String?
+  ) async throws {
     do {
       var config = try await DynamoDBClient.DynamoDBClientConfiguration()
       if let region = region {
         config.region = region
       }
+
+      if let endpoint = endpoint {
+        config.endpoint = endpoint
+      }
+
+      let regionDescription = config.region ?? "nil"
+      let endpointDescription = config.endpoint ?? "nil"
+      print(
+        "Initializing DynamoDB client with region: \(regionDescription), endpoint: \(endpointDescription), table: \(tableName)"
+      )
 
       self.ddbClient = DynamoDBClient(config: config)
       self.tableName = tableName
@@ -36,31 +52,46 @@ public struct DynamoDBTable {
   }
 
   private func createTable() async throws {
-    let input = CreateTableInput(
-      attributeDefinitions: [
-        DynamoDBClientTypes.AttributeDefinition(attributeName: "JobId", attributeType: .s),
-        DynamoDBClientTypes.AttributeDefinition(attributeName: "PostedDate", attributeType: .s),
-      ],
-      billingMode: DynamoDBClientTypes.BillingMode.payPerRequest,
-      globalSecondaryIndexes: [
-        DynamoDBClientTypes.GlobalSecondaryIndex(
-          indexName: "PostedDate-Index",
-          keySchema: [
-            DynamoDBClientTypes.KeySchemaElement(attributeName: "PostedDate", keyType: .hash),
-            DynamoDBClientTypes.KeySchemaElement(attributeName: "JobId", keyType: .range),
+    do {
+      let describeInput = DescribeTableInput(tableName: self.tableName)
+      _ = try await ddbClient.describeTable(input: describeInput)
+      return
+    } catch {
+      let errorString = String(describing: error)
+      if errorString.contains("ResourceNotFoundException") {
+        let input = CreateTableInput(
+          attributeDefinitions: [
+            DynamoDBClientTypes.AttributeDefinition(attributeName: "JobId", attributeType: .s),
+            DynamoDBClientTypes.AttributeDefinition(attributeName: "PostedDate", attributeType: .s),
           ],
-          projection: DynamoDBClientTypes.Projection(projectionType: .all)
+          billingMode: DynamoDBClientTypes.BillingMode.payPerRequest,
+          globalSecondaryIndexes: [
+            DynamoDBClientTypes.GlobalSecondaryIndex(
+              indexName: "PostedDate-Index",
+              keySchema: [
+                DynamoDBClientTypes.KeySchemaElement(attributeName: "PostedDate", keyType: .hash),
+                DynamoDBClientTypes.KeySchemaElement(attributeName: "JobId", keyType: .range),
+              ],
+              projection: DynamoDBClientTypes.Projection(projectionType: .all)
+            )
+          ],
+          keySchema: [
+            DynamoDBClientTypes.KeySchemaElement(attributeName: "JobId", keyType: .hash)
+          ],
+          tableName: self.tableName
         )
-      ],
-      keySchema: [
-        DynamoDBClientTypes.KeySchemaElement(attributeName: "JobId", keyType: .hash)
-      ],
-      tableName: self.tableName
-    )
-    let output = try await ddbClient.createTable(input: input)
-    if output.tableDescription == nil {
-      throw DynamoDBError.TableNotFound
+        let output = try await ddbClient.createTable(input: input)
+        if output.tableDescription == nil {
+          throw DynamoDBError.TableNotFound
+        }
+        return
+      }
+      if errorString.contains("ResourceInUseException") || errorString.contains("already exists") {
+        return
+      }
+      throw error
     }
+
   }
 
   public func putJob(_ job: Job) async throws {
@@ -79,8 +110,22 @@ public struct DynamoDBTable {
     }
   }
 
+  func postJob(_ job: Job, config: AppConfig, logger: Logger) async {
+    if config.apiDryRun {
+      logger.info("🧪 DEV MODE: Simulating DB post for job: \(job.title)")
+      return
+    }
+
+    do {
+      try await putJob(job)
+      logger.info("\t📦 Post successful: \(job.title)")
+    } catch {
+      logger.error("❌ Failed to post job \(job.jobId): \(error)")
+    }
+  }
+
   // for local testing not for AWS lambda
-  public func writeJobIdsToFile(filename: String, keySet: [String: Bool]) throws {
+  func writeJobIdsToFile(filename: String, keySet: [String: Bool]) throws {
     let cwd = FileManager.default.currentDirectoryPath
     let fileURL = URL(fileURLWithPath: cwd).appendingPathComponent(filename)
 

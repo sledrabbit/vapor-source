@@ -204,7 +204,7 @@ extension Job {
         "DeadlineDate": [
           "type": "string",
           "description":
-            "Deadline or expiry date for the job posting. Use 'Ongoing until requisition is closed' if not specified",
+            "Deadline or expiry date for the job posting in YYYY-MM-DD format (e.g., 2025-11-02). Use 'Ongoing until requisition is closed' if not specified.",
         ],
         "MinDegree": [
           "type": "string",

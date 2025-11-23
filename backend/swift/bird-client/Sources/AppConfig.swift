@@ -15,6 +15,8 @@ struct AppConfig {
   let scraperRequestDelay: TimeInterval
 
   let parserMaxConcurrentTasks: Int
+  let awsRegion: String?
+  let dynamoDBEndPoint: String?
 
   init() throws {
     func getRequiredEnvVar(_ key: String) throws -> String {
@@ -57,6 +59,9 @@ struct AppConfig {
     self.scraperRequestDelay = getEnvVarAsTimeInterval("SCRAPER_REQUEST_DELAY", default: 1.0)
 
     self.parserMaxConcurrentTasks = getEnvVarAsInt("PARSER_MAX_CONCURRENT_TASKS", default: 25)
+    self.awsRegion = getEnvVar("AWS_REGION", default: "us-west-2")
+    let endpointValue = getEnvVar("DYNAMODB_ENDPOINT", default: "")
+    self.dynamoDBEndPoint = endpointValue.isEmpty ? nil : endpointValue
   }
 }
 

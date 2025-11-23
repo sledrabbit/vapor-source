@@ -1,3 +1,4 @@
+import AWSSDKIdentity
 import Foundation
 import Logging
 
@@ -29,14 +30,28 @@ class AppRunner {
     }
 
     let parser = Parser(
-        jobStream: jobStream,
-        config: config,
-        logger: logger
-      )
+      jobStream: jobStream,
+      config: config,
+      logger: logger
+    )
 
-    let parsedJobs = await parser.parseJobs()
-    logger.info(
-      "Parsed \(parsedJobs.count) jobs. Posting is disabled for now.")
+    debug(
+      "\t🔧 DynamoDB config - region: \(config.awsRegion ?? "nil"), endpoint: \(config.dynamoDBEndPoint ?? "nil")"
+    )
+
+    do {
+      let table = try await DynamoDBTable(
+        region: config.awsRegion,
+        tableName: "Jobs",
+        endpoint: config.dynamoDBEndPoint
+      )
+      for await parsedJob in parser.parseJobs() {
+        await table.postJob(parsedJob, config: config, logger: logger)
+      }
+    } catch {
+      logger.error("Failed to initialize DynamoDB table: \(error)")
+      return
+    }
 
     let executionTime = Date().timeIntervalSince(startTime)
     debug("Job processing completed in \(String(format: "%.2f", executionTime)) seconds")

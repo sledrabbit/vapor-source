@@ -1,6 +1,6 @@
 import Foundation
-import Kanna
 import Logging
+import SwiftSoup
 
 #if canImport(FoundationNetworking)
   import FoundationNetworking
@@ -13,7 +13,7 @@ protocol NetworkFetching: Sendable {
 }
 
 protocol HtmlParsing: Sendable {
-  func parseHtml(from htmlString: String) throws -> HTMLDocument
+  func parseHtml(from htmlString: String) throws -> Document
 }
 
 extension URLSession: NetworkFetching {
@@ -23,18 +23,11 @@ extension URLSession: NetworkFetching {
   }
 }
 
-struct KannaHtmlParser: HtmlParsing {
+struct SwiftSoupHtmlParser: HtmlParsing {
   public init() {}
 
-  public func parseHtml(from htmlString: String) throws -> HTMLDocument {
-    guard let document = try? HTML(html: htmlString, encoding: .utf8) else {
-      throw NSError(
-        domain: "ScraperError",
-        code: 1,
-        userInfo: [NSLocalizedDescriptionKey: "Failed to parse HTML"]
-      )
-    }
-    return document
+  public func parseHtml(from htmlString: String) throws -> Document {
+    return try SwiftSoup.parse(htmlString)
   }
 }
 
@@ -53,7 +46,7 @@ struct Scraper: Sendable {
     self.config = config
     self.logger = logger
     self.networkFetcher = networkFetcher ?? URLSession.shared
-    self.htmlParser = htmlParser ?? KannaHtmlParser()
+    self.htmlParser = htmlParser ?? SwiftSoupHtmlParser()
   }
 }
 
@@ -118,15 +111,16 @@ extension Scraper {
     return htmlString
   }
 
-  private func extractJobLinks(from document: HTMLDocument) -> [(
+  private func extractJobLinks(from document: Document) throws -> [(
     url: String, jobId: String
   )] {
     let jobIdRegex = /JobID=(\d+)/
     let base = URL(string: config.scraperBaseUrl)
     var results: [(url: String, jobId: String)] = []
 
-    for linkElement in document.css("h2.with-badge a") {
-      guard let relativeUrl = linkElement["href"],
+    let linkElements = try document.select("h2.with-badge a")
+    for linkElement in linkElements {
+      guard let relativeUrl = try? linkElement.attr("href"),
         let url = URL(string: relativeUrl, relativeTo: base)?.absoluteString,
         let match = url.firstMatch(of: jobIdRegex)
       else {
@@ -139,23 +133,33 @@ extension Scraper {
     return results
   }
 
-  private func parseJobDetails(from document: HTMLDocument, url: String, jobId: String) -> Job {
-    let title = document.css("h1").first?.text ?? "Unknown Title"
-    let company = document.css("h4 .capital-letter").first?.text ?? "Unknown Company"
-    let location = document.css("h4 small.wrappable").first?.text ?? "Unknown Location"
-    let description = document.css("span#TrackingJobBody").first?.text ?? "No description available"
+  private func parseJobDetails(from document: Document, url: String, jobId: String) throws -> Job {
+    let title = try document.select("h1").first()?.text() ?? "Unknown Title"
+    let company = try document.select("h4 .capital-letter").first()?.text() ?? "Unknown Company"
+    let location = try document.select("h4 small.wrappable").first()?.text() ?? "Unknown Location"
+    let description =
+      try document.select("span#TrackingJobBody").first()?.text() ?? "No description available"
 
     let salary =
-      document.xpath(
-        "//div[contains(@class,'panel-solid')]//dl//dt[contains(text(),'Salary')]/following-sibling::dd"
-      ).first?.text ?? "Not specified"
+      try document.select("div.panel-solid dl span:has(dt:contains(Salary)) dd").first()?.text()
+      ?? "Not specified"
 
-    let postedDate: String
-    if let dateText = document.xpath("//p[contains(text(),'Posted:')]").first?.text,
+    var postedDate = ""
+    if let dateText = try document.select("p:contains(Posted:)").first()?.text(),
       let match = dateText.firstMatch(of: /Posted:\s*(.+?)(?:\s*-|$)/)
     {
-      postedDate = String(match.1).trimmingCharacters(in: .whitespacesAndNewlines)
-    } else {
+      let rawDate = String(match.1).trimmingCharacters(in: .whitespacesAndNewlines)
+      postedDate = normalizePostedDate(rawDate)
+    }
+
+    if postedDate.isEmpty,
+      let fallback = try document.select("span.job-view-posting-date").first()?.text(),
+      !fallback.isEmpty
+    {
+      postedDate = fallback
+    }
+
+    if postedDate.isEmpty {
       postedDate = "Unknown Date"
     }
 
@@ -181,6 +185,24 @@ extension Scraper {
     )
   }
 
+  private func normalizePostedDate(_ dateString: String) -> String {
+    let inputFormatter = DateFormatter()
+    inputFormatter.locale = Locale(identifier: "en_US_POSIX")
+    inputFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+    inputFormatter.dateFormat = "M/d/yyyy"
+
+    guard let date = inputFormatter.date(from: dateString) else {
+      return dateString
+    }
+
+    let outputFormatter = DateFormatter()
+    outputFormatter.locale = Locale(identifier: "en_US_POSIX")
+    outputFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+    outputFormatter.dateFormat = "yyyy-MM-dd"
+
+    return outputFormatter.string(from: date)
+  }
+
   private func scrapeJobsFromPage(
     pageNum: Int,
     query: String,
@@ -192,7 +214,7 @@ extension Scraper {
     let url = buildUrl(query: query, page: String(pageNum))
     let htmlString = try await fetchPage(url: url)
     let document = try htmlParser.parseHtml(from: htmlString)
-    let jobLinks = extractJobLinks(from: document)
+    let jobLinks = try extractJobLinks(from: document)
 
     debug("🔍 Found \(jobLinks.count) job links on page \(pageNum)")
 
@@ -212,7 +234,7 @@ extension Scraper {
           do {
             let jobHtml = try await self.fetchPage(url: jobUrl)
             let document = try htmlParser.parseHtml(from: jobHtml)
-            let job = self.parseJobDetails(from: document, url: jobUrl, jobId: jobId)
+            let job = try self.parseJobDetails(from: document, url: jobUrl, jobId: jobId)
             return job
           } catch {
             logger.error("Error processing job \(jobId): \(error)")

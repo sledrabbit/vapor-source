@@ -30,6 +30,10 @@ Resources:
           DEBUG_OUTPUT: "true"
           API_DRY_RUN: "true"
           USE_MOCK_JOBS: "true"
+          DYNAMODB_ENDPOINT: "http://host.docker.internal:8000"
+          AWS_ACCESS_KEY_ID: "dummy"
+          AWS_SECRET_ACCESS_KEY: "dummy"
+          AWS_REGION: "us-west-2"
           LLM_PROMPT_PATH: "/var/task/prompt.txt"
           OPENAI_API_KEY: "" # Ensure this is set in env.json or actual environment for real runs
           API_SERVER_URL: "http://host.docker.internal:8080/api"

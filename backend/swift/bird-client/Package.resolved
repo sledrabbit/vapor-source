@@ -1,5 +1,5 @@
 {
-  "originHash" : "01e576e58e2713ef134a5b6b4689334152d192a80b169b8517de814fca1e64cc",
+  "originHash" : "36770e93799fd0269542c137aebbb04be108d62c0b9d3193e3de8454505e5263",
   "pins" : [
     {
       "identity" : "aws-crt-swift",
@@ -29,12 +29,12 @@
       }
     },
     {
-      "identity" : "kanna",
+      "identity" : "lrucache",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tid-kijyun/Kanna.git",
+      "location" : "https://github.com/nicklockwood/LRUCache.git",
       "state" : {
-        "revision" : "a23a4584f8e7de07cab420ae4d51eee553dd988d",
-        "version" : "6.0.1"
+        "revision" : "0d91406ecd4d6c1c56275866f00508d9aeacc92a",
+        "version" : "1.2.0"
       }
     },
     {
@@ -269,6 +269,15 @@
       "state" : {
         "revision" : "395a77f0aa927f0ff73941d7ac35f2b46d47c9db",
         "version" : "1.6.3"
+      }
+    },
+    {
+      "identity" : "swiftsoup",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/scinfu/SwiftSoup.git",
+      "state" : {
+        "revision" : "4206bc7b8bd9a4ff8e9511211e1b4bff979ef9c4",
+        "version" : "2.11.1"
       }
     },
     {

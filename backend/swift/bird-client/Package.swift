@@ -11,7 +11,7 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/awslabs/swift-aws-lambda-runtime.git", from: "2.4.0"),
     .package(url: "https://github.com/swift-server/swift-aws-lambda-events.git", from: "1.2.1"),
-    .package(url: "https://github.com/tid-kijyun/Kanna.git", from: "6.0.1"),
+    .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.11.1"),
     .package(url: "https://github.com/awslabs/aws-sdk-swift.git", from: "1.6.3"),
   ],
   targets: [
@@ -20,10 +20,11 @@ let package = Package(
     .executableTarget(
       name: "bird-client",
       dependencies: [
+        .product(name: "AWSSDKIdentity", package: "aws-sdk-swift"),
         .product(name: "AWSDynamoDB", package: "aws-sdk-swift"),
         .product(name: "AWSLambdaRuntime", package: "swift-aws-lambda-runtime"),
         .product(name: "AWSLambdaEvents", package: "swift-aws-lambda-events"),
-        .product(name: "Kanna", package: "Kanna"),
+        .product(name: "SwiftSoup", package: "SwiftSoup"),
       ]
     )
   ]

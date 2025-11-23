@@ -49,42 +49,34 @@ struct Parser: Sendable {
 // MARK: - Public API
 
 extension Parser {
-  func parseJobs() async -> [Job] {
-    let limiter = ConcurrencyLimiter(limit: config.parserMaxConcurrentTasks)
+  func parseJobs() -> AsyncStream<Job> {
+    return AsyncStream { continuation in
+      Task {
+        let limiter = ConcurrencyLimiter(limit: config.parserMaxConcurrentTasks)
 
-    return await withTaskGroup(of: Job?.self) { group -> [Job] in
-      for await job in jobStream {
-        await limiter.wait()
+        await withTaskGroup(of: Void.self) { group in
+          for await job in jobStream {
+            await limiter.wait()
 
-        group.addTask {
-          defer {
-            Task { await limiter.signal() }
-          }
+            group.addTask {
+              defer { Task { await limiter.signal() } }
 
-          do {
-            if let processedJob = try await self.processJob(job) {
-              return processedJob
-            } else {
-              self.debug("\t🦉 Filtering out or failed to parse job: \(job.title)")
-              return nil
+              do {
+                if let processedJob = try await self.processJob(job) {
+                  continuation.yield(processedJob)
+                }
+              } catch {
+                self.logger.error("Error processing job \(job.jobId): \(error)")
+              }
             }
-          } catch {
-            self.logger.error("Error processing job \(job.jobId): \(error)")
-            return nil
           }
+          await group.waitForAll()
+          continuation.finish()
         }
       }
-      var parsedJobs: [Job] = []
-      while let result = await group.next() {
-        if let job = result {
-          parsedJobs.append(job)
-        }
-      }
-      return parsedJobs
     }
   }
 }
-
 // MARK: - Job Processing
 
 extension Parser {
@@ -149,8 +141,8 @@ extension Parser {
       updatedJob.minYearsExperience = parsedFields.MinYearsExperience
       updatedJob.modality = parsedFields.Modality
       updatedJob.domain = parsedFields.Domain
-      updatedJob.languages = parsedFields.Languages.map { Language(name: $0)}
-      updatedJob.technologies = parsedFields.Technologies.map { Technology(name: $0)}
+      updatedJob.languages = parsedFields.Languages.map { Language(name: $0) }
+      updatedJob.technologies = parsedFields.Technologies.map { Technology(name: $0) }
       updatedJob.expiresDate = parsedFields.DeadlineDate
 
       return updatedJob
