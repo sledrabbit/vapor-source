@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Job scraping Lambda built from backend/go/cmd/lambda.
+
+Parameters:
+  OpenAIAPIKey:
+    Type: String
+    Description: OpenAI token used by the parser service.
+    NoEcho: true
+  Query:
+    Type: String
+    Default: "software engineer"
+    Description: Default search term for the scraper.
+  DebugOutput:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: Enable verbose debug logging.
+  ApiDryRun:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "true"
+    Description: Skip remote API calls when true.
+
+Globals:
+  Function:
+    Runtime: provided.al2023
+    Architectures:
+      - arm64
+    Timeout: 900
+    MemorySize: 128
+
+Resources:
+  JobScraperFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: JobScraperLambda
+      CodeUri: .
+      Handler: bootstrap
+      Description: Runs the Go scraper pipeline inside Lambda.
+      Environment:
+        Variables:
+          OPENAI_API_KEY: !Ref OpenAIAPIKey
+          QUERY: !Ref Query
+          DEBUG_OUTPUT: !Ref DebugOutput
+          API_DRY_RUN: !Ref ApiDryRun
+          AWS_REGION: us-west-2
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            Path: /scrape
+            Method: post
+    Metadata:
+      BuildMethod: makefile
+
+Outputs:
+  JobScraperFunctionArn:
+    Description: ARN of the deployed Lambda function.
+    Value: !GetAtt JobScraperFunction.Arn

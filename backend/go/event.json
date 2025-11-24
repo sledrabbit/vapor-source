@@ -1,0 +1,32 @@
+{
+  "version": "2.0",
+  "routeKey": "POST /scrape",
+  "rawPath": "/scrape",
+  "rawQueryString": "",
+  "headers": {
+    "content-type": "application/json",
+    "user-agent": "SamLocal/1.0",
+    "x-forwarded-proto": "https",
+    "x-forwarded-for": "127.0.0.1"
+  },
+  "requestContext": {
+    "accountId": "anonymous",
+    "apiId": "local-api-id",
+    "domainName": "localhost",
+    "domainPrefix": "local",
+    "http": {
+      "method": "POST",
+      "path": "/scrape",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "127.0.0.1",
+      "userAgent": "SamLocal/1.0"
+    },
+    "requestId": "test-request-id",
+    "routeKey": "POST /scrape",
+    "stage": "$default",
+    "time": "01/May/2024:12:00:00 +0000",
+    "timeEpoch": 1714564800000
+  },
+  "body": "{\"query\":\"software engineer\"}",
+  "isBase64Encoded": false
+}

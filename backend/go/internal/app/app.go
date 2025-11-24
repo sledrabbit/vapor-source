@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bufio"
@@ -17,39 +17,31 @@ import (
 	"gopher-source/utils"
 )
 
-func main() {
+// Run executes the shared scraping pipeline used by both local and Lambda binaries.
+func Run(ctx context.Context, cfg *config.Config) error {
 	startTime := time.Now()
-
-	// load config
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// initialize clients
 	awsConfig, err := services.NewDynamoConfig(ctx)
 	if err != nil {
-		fmt.Printf("failed to load aws config %v", err)
+		return fmt.Errorf("load aws config: %w", err)
 	}
 	dynamoService := services.NewDynamoService(awsConfig, "Jobs")
-	err = dynamoService.CreateJobsTable(ctx)
-	if err != nil {
-		log.Fatalf("Failed to create DynamoDB table: %v", err)
+	if err := dynamoService.CreateJobsTable(ctx); err != nil {
+		return fmt.Errorf("create DynamoDB table: %w", err)
 	}
+
 	// TODO: replace local file with S3
 	keySet, err := readKeysFromFile(cfg.Filename)
 	if err != nil {
-		fmt.Printf("Error reading file with JobIds %v", err)
+		return fmt.Errorf("read job ids: %w", err)
 	}
 	keySetInitialSize := len(keySet)
+
 	openaiService := services.NewOpenAIService()
 	parser := services.NewParserService(openaiService)
 	scraper := services.NewScraperWithKeyset(*cfg, true, keySet)
 
-	// setup concurrency
 	jobsChan := make(chan models.Job)
 	var processingWg sync.WaitGroup
 	processingWg.Add(1)
@@ -67,62 +59,64 @@ func main() {
 
 	// TODO: replace local file with S3
 	keySet = scraper.GetProcessedIDs()
-	dynamoService.WriteJobIdsToFile(cfg.Filename, keySet)
+	if err := dynamoService.WriteJobIdsToFile(cfg.Filename, keySet); err != nil {
+		return fmt.Errorf("write job ids: %w", err)
+	}
 	keySetFinalSize := len(keySet)
 	utils.Debug(fmt.Sprintf("💰Jobs added to cache: %d", keySetFinalSize-keySetInitialSize))
 
 	executionTime := time.Since(startTime)
-
 	// print stats
 	stats.PrintSummary(executionTime)
+
+	return nil
 }
 
 func processAndSendJobs(ctx context.Context, jobsChan <-chan models.Job, stats *models.JobStats, cfg config.Config,
 	parser services.ParserClient, dynamoService services.DynamoDBClient) {
-	// semaphore to limit concurrency
 	sem := make(chan struct{}, cfg.MaxConcurrency)
 	var wg sync.WaitGroup
 
 	for job := range jobsChan {
 		atomic.AddInt64(&stats.TotalJobs, 1)
 		wg.Add(1)
-		sem <- struct{}{} // acquire semaphore
+		sem <- struct{}{}
 
 		go func(job models.Job) {
 			defer wg.Done()
-			defer func() { <-sem }() // release semaphore
+			defer func() { <-sem }()
 
 			atomic.AddInt64(&stats.ProcessedJobs, 1)
 			if cfg.ApiDryRun == "true" {
 				mockParse(job)
+				return
+			}
+
+			enhancedJob, success := parser.ParseWithStats(ctx, &job)
+			if enhancedJob == nil {
+				atomic.AddInt64(&stats.FailedJobs, 1)
+				return
+			}
+
+			if success {
+				atomic.AddInt64(&stats.SuccessfulJobs, 1)
 			} else {
-				enhancedJob, success := parser.ParseWithStats(ctx, &job)
-				if enhancedJob == nil {
-					atomic.AddInt64(&stats.FailedJobs, 1)
-					return
-				}
-				if success {
-					atomic.AddInt64(&stats.SuccessfulJobs, 1)
-				} else {
-					atomic.AddInt64(&stats.FailedJobs, 1)
-				}
-				if enhancedJob.IsSoftwareEngineerRelated == false {
-					atomic.AddInt64(&stats.UnrelatedJobs, 1)
-				}
-				err := dynamoService.PutJob(ctx, enhancedJob)
-				if err != nil {
-					log.Printf("Failed to put job to DynamoDB: %v", err)
-				}
-				if cfg.ApiDryRun == "true" {
-					mockPost(*enhancedJob)
-				}
+				atomic.AddInt64(&stats.FailedJobs, 1)
+			}
+			if !enhancedJob.IsSoftwareEngineerRelated {
+				atomic.AddInt64(&stats.UnrelatedJobs, 1)
+			}
+			if err := dynamoService.PutJob(ctx, enhancedJob); err != nil {
+				log.Printf("Failed to put job to DynamoDB: %v", err)
+			}
+			if cfg.ApiDryRun == "true" {
+				mockPost(*enhancedJob)
 			}
 		}(job)
 	}
 	wg.Wait()
 }
 
-// mock send to server
 func mockPost(job models.Job) {
 	jsonData, err := json.Marshal(job)
 	if err != nil {
@@ -132,7 +126,6 @@ func mockPost(job models.Job) {
 	utils.Debug(fmt.Sprintf("\t📦 Post successful: %s (payload size: %d bytes)", job.Title, len(jsonData)))
 }
 
-// mock API parsing
 func mockParse(job models.Job) {
 	utils.Debug(fmt.Sprintf("\t🧪 DEV MODE: Simulating AI response for job: %s", job.Title))
 	enhancedJob := job
@@ -156,6 +149,7 @@ func readKeysFromFile(filename string) (map[string]bool, error) {
 			if err != nil {
 				return keySet, fmt.Errorf("failed to create file: %v", err)
 			}
+			file.Close()
 			return keySet, nil
 		}
 		return keySet, fmt.Errorf("failure to open file: %v", err)
@@ -169,7 +163,7 @@ func readKeysFromFile(filename string) (map[string]bool, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Printf("error reading file: %v", err)
+		return keySet, fmt.Errorf("error reading file: %w", err)
 	}
 	return keySet, nil
 }
