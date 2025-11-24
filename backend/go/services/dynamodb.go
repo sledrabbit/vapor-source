@@ -9,6 +9,7 @@ import (
 	"gopher-source/utils"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -32,8 +33,11 @@ type dynamoDBClientImpl struct {
 }
 
 func NewDynamoService(cfg aws.Config, tableName string) DynamoDBClient {
+	endpoint := os.Getenv("DYNAMODB_ENDPOINT")
 	client := dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
-		o.BaseEndpoint = aws.String("http://localhost:8000")
+		if strings.TrimSpace(endpoint) != "" {
+			o.BaseEndpoint = aws.String(endpoint)
+		}
 	})
 	return &dynamoDBClientImpl{client: client, tableName: tableName}
 }

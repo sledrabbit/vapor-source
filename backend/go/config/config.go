@@ -3,6 +3,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -21,41 +24,97 @@ type Config struct {
 	Filename       string
 }
 
+var (
+	envLoadOnce sync.Once
+	envLoadErr  error
+)
+
+func init() {
+	_ = EnsureEnvLoaded()
+}
+
 func Load() (*Config, error) {
-	if err := godotenv.Load(".env"); err != nil {
-		return nil, fmt.Errorf("failed to load .env file: %w", err)
+	if err := EnsureEnvLoaded(); err != nil {
+		return nil, err
 	}
 
-	apiKey := os.Getenv("OPENAI_API_KEY")
-	if apiKey == "" {
-		return nil, fmt.Errorf("OPENAI_API_KEY environment variable is not set")
-	}
-
-	query := os.Getenv("QUERY")
-	if query == "" {
-		query = "software developer"
-	}
-
-	debugOutput := os.Getenv("DEBUG_OUTPUT")
-	if debugOutput == "" {
-		return nil, fmt.Errorf("DEBUG_OUTPUT environment variable is not set")
-	}
-
-	apiDryRun := os.Getenv("API_DRY_RUN")
-	if apiDryRun == "" {
-		return nil, fmt.Errorf("API_DRY_RUN environment variable is not set")
-	}
+	query := getEnvOrDefault("QUERY", "software developer")
+	jobIDsPath := getEnvOrDefault("JOB_IDS_PATH", defaultJobIDsPath())
 
 	return &Config{
-		MaxPages:       5,
+		MaxPages:       2,
 		BaseURL:        "https://seeker.worksourcewa.com/",
 		RequestDelay:   1 * time.Nanosecond,
-		OpenAIAPIKey:   apiKey,
+		OpenAIAPIKey:   strings.TrimSpace(os.Getenv("OPENAI_API_KEY")),
 		Query:          query,
-		DebugOutput:    debugOutput,
-		ApiDryRun:      apiDryRun,
+		DebugOutput:    getBoolEnv("DEBUG_OUTPUT", false),
+		ApiDryRun:      getBoolEnv("API_DRY_RUN", false),
 		MaxConcurrency: 25,
-		DefaultQuery:   "software developer",
-		Filename:       "job-ids.txt",
+		DefaultQuery:   query,
+		Filename:       jobIDsPath,
 	}, nil
+}
+
+func EnsureEnvLoaded() error {
+	envLoadOnce.Do(func() {
+		envLoadErr = loadDotEnv()
+	})
+	return envLoadErr
+}
+
+func loadDotEnv() error {
+	if err := godotenv.Overload(".env"); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to load .env file: %w", err)
+	}
+	return nil
+}
+
+func getEnvOrDefault(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return fallback
+}
+
+func getBoolEnv(key string, fallback bool) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return normalizeBoolString(value, fallback)
+	}
+	return boolToString(fallback)
+}
+
+func normalizeBoolString(value string, fallback bool) string {
+	normalized := strings.ToLower(strings.Trim(value, " \t\n\r,"))
+	switch normalized {
+	case "1", "true", "yes", "y", "on":
+		return "true"
+	case "0", "false", "no", "n", "off":
+		return "false"
+	}
+	return boolToString(fallback)
+}
+
+func boolToString(value bool) string {
+	if value {
+		return "true"
+	}
+	return "false"
+}
+
+func defaultJobIDsPath() string {
+	if runningInLambda() {
+		return filepath.Join(os.TempDir(), "job-ids.txt")
+	}
+	return "job-ids.txt"
+}
+
+func runningInLambda() bool {
+	return strings.TrimSpace(os.Getenv("AWS_LAMBDA_FUNCTION_NAME")) != "" ||
+		strings.TrimSpace(os.Getenv("LAMBDA_TASK_ROOT")) != ""
 }

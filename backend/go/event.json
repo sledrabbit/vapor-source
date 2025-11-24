@@ -2,7 +2,11 @@
   "version": "2.0",
   "routeKey": "POST /scrape",
   "rawPath": "/scrape",
-  "rawQueryString": "",
+  "rawQueryString": "query=software%20engineer&dryrun=1",
+  "queryStringParameters": {
+    "query": "software engineer",
+    "dryrun": "1"
+  },
   "headers": {
     "content-type": "application/json",
     "user-agent": "SamLocal/1.0",
