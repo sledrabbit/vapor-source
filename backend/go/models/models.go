@@ -58,26 +58,43 @@ type JobStats struct {
 	SuccessfulJobs int64
 	FailedJobs     int64
 	UnrelatedJobs  int64
+	SkippedJobs    int64
+}
+
+// snapshot captures a point-in-time copy of the aggregated counters
+func (s *JobStats) Snapshot() JobStats {
+	return JobStats{
+		TotalJobs:      atomic.LoadInt64(&s.TotalJobs),
+		ProcessedJobs:  atomic.LoadInt64(&s.ProcessedJobs),
+		SuccessfulJobs: atomic.LoadInt64(&s.SuccessfulJobs),
+		FailedJobs:     atomic.LoadInt64(&s.FailedJobs),
+		UnrelatedJobs:  atomic.LoadInt64(&s.UnrelatedJobs),
+		SkippedJobs:    atomic.LoadInt64(&s.SkippedJobs),
+	}
 }
 
 func (s *JobStats) PrintSummary(executionTime time.Duration) {
-	totalJobs := atomic.LoadInt64(&s.TotalJobs)
-	processedJobs := atomic.LoadInt64(&s.ProcessedJobs)
-	successfulJobs := atomic.LoadInt64(&s.SuccessfulJobs)
+	snapshot := s.Snapshot()
+	totalJobs := snapshot.TotalJobs
+	processedJobs := snapshot.ProcessedJobs
+	successfulJobs := snapshot.SuccessfulJobs
+	skippedJobs := snapshot.SkippedJobs
+	handledJobs := processedJobs + skippedJobs
 
 	fmt.Printf("\n📊 Job Processing Statistics:\n")
 	fmt.Printf("   Total Jobs Scraped: %d\n", totalJobs)
 	fmt.Printf("   Jobs Processed: %d\n", processedJobs)
-	fmt.Printf("   Unrelated Jobs: %d\n", atomic.LoadInt64(&s.UnrelatedJobs))
+	fmt.Printf("   Jobs Skipped (cached): %d\n", skippedJobs)
+	fmt.Printf("   Unrelated Jobs: %d\n", snapshot.UnrelatedJobs)
 	fmt.Printf("   Successfully Parsed by OpenAI: %d\n", successfulJobs)
-	fmt.Printf("   Failed to Parse: %d\n", atomic.LoadInt64(&s.FailedJobs))
+	fmt.Printf("   Failed to Parse: %d\n", snapshot.FailedJobs)
 
-	if totalJobs > 0 {
-		fmt.Printf("   Success Rate: %.1f%%\n", float64(successfulJobs)/float64(totalJobs)*100)
+	if processedJobs > 0 {
+		fmt.Printf("   Success Rate: %.1f%%\n", float64(successfulJobs)/float64(processedJobs)*100)
 	}
 
 	fmt.Printf("   Execution Time: %.2f seconds\n", executionTime.Seconds())
 	if executionTime.Seconds() > 0 {
-		fmt.Printf("   Jobs per Second: %.2f\n", float64(processedJobs)/executionTime.Seconds())
+		fmt.Printf("   Jobs per Second: %.2f\n", float64(handledJobs)/executionTime.Seconds())
 	}
 }

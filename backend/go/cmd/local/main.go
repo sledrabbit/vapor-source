@@ -18,7 +18,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if err := app.Run(ctx, cfg); err != nil {
+	result, err := app.Run(ctx, cfg)
+	if err != nil {
 		log.Fatalf("Job pipeline failed: %v", err)
 	}
+	log.Printf("Job pipeline completed in %.2f seconds. Jobs added to cache: %d", result.ExecutionTime.Seconds(), result.JobsAddedToCache)
 }

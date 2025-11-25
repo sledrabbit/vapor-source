@@ -20,14 +20,28 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
+type RunResult struct {
+	ExecutionTime       time.Duration
+	Stats               models.JobStats
+	JobCacheEnabled     bool
+	JobCacheInitialSize int
+	JobCacheFinalSize   int
+	JobsAddedToCache    int
+	JobCacheS3Bucket    string
+	JobCacheS3Key       string
+}
+
 // Run executes the shared scraping pipeline used by both local and Lambda binaries.
-func Run(ctx context.Context, cfg *config.Config) error {
+func Run(ctx context.Context, cfg *config.Config) (*RunResult, error) {
 	startTime := time.Now()
+	result := &RunResult{
+		JobCacheEnabled: cfg.UseJobIDFile,
+	}
 
 	// initialize clients
 	awsConfig, err := services.NewDynamoConfig(ctx, cfg.AWSRegion)
 	if err != nil {
-		return fmt.Errorf("load aws config: %w", err)
+		return nil, fmt.Errorf("load aws config: %w", err)
 	}
 	dynamoService := services.NewDynamoService(awsConfig, cfg.DynamoTableName, cfg.DynamoEndpoint)
 
@@ -37,7 +51,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			s3Service = services.NewS3Service(awsConfig)
 			utils.Debug(fmt.Sprintf("Downloading job ID cache from s3://%s/%s", cfg.JobIDsBucket, cfg.JobIDsS3Key))
 			if err := downloadJobIDCache(ctx, s3Service, cfg.JobIDsBucket, cfg.JobIDsS3Key, cfg.Filename); err != nil {
-				return fmt.Errorf("sync job id cache: %w", err)
+				return nil, fmt.Errorf("sync job id cache: %w", err)
 			}
 		} else {
 			utils.Debug("S3 job ID cache enabled but JOB_IDS_BUCKET or JOB_IDS_S3_KEY not set; skipping S3 sync")
@@ -50,9 +64,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		var err error
 		keySet, err = readKeysFromFile(cfg.Filename)
 		if err != nil {
-			return fmt.Errorf("read job ids: %w", err)
+			return nil, fmt.Errorf("read job ids: %w", err)
 		}
 		keySetInitialSize = len(keySet)
+		result.JobCacheInitialSize = keySetInitialSize
+		result.JobCacheFinalSize = keySetInitialSize
 		utils.Debug(fmt.Sprintf("Job ID cache contains %d entries prior to scraping", keySetInitialSize))
 	} else {
 		utils.Debug("Skipping job ID file cache for this run")
@@ -74,21 +90,25 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	// scrape
 	utils.Debug(fmt.Sprintf("🚀 Starting job scraping for '%s' with max pages set to %d", cfg.DefaultQuery, cfg.MaxPages))
-	scraper.ScrapeJobs(ctx, cfg.DefaultQuery, jobsChan)
+	scraper.ScrapeJobs(ctx, cfg.DefaultQuery, jobsChan, stats)
 	processingWg.Wait()
 
 	if cfg.UseJobIDFile {
 		keySet = scraper.GetProcessedIDs()
 		if err := dynamoService.WriteJobIdsToFile(cfg.Filename, keySet); err != nil {
-			return fmt.Errorf("write job ids: %w", err)
+			return nil, fmt.Errorf("write job ids: %w", err)
 		}
 		if cfg.UseS3JobIDFile && s3Service != nil {
 			utils.Debug(fmt.Sprintf("Uploading %d job IDs to s3://%s/%s", len(keySet), cfg.JobIDsBucket, cfg.JobIDsS3Key))
 			if err := uploadJobIDCache(ctx, s3Service, cfg.JobIDsBucket, cfg.JobIDsS3Key, cfg.Filename); err != nil {
-				return err
+				return nil, err
 			}
+			result.JobCacheS3Bucket = cfg.JobIDsBucket
+			result.JobCacheS3Key = cfg.JobIDsS3Key
 		}
 		keySetFinalSize := len(keySet)
+		result.JobCacheFinalSize = keySetFinalSize
+		result.JobsAddedToCache = keySetFinalSize - keySetInitialSize
 		utils.Debug(fmt.Sprintf("💰Jobs added to cache: %d", keySetFinalSize-keySetInitialSize))
 		utils.Debug(fmt.Sprintf("Job ID cache now contains %d entries", keySetFinalSize))
 	}
@@ -96,8 +116,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	executionTime := time.Since(startTime)
 	// print stats
 	stats.PrintSummary(executionTime)
+	result.ExecutionTime = executionTime
+	result.Stats = stats.Snapshot()
 
-	return nil
+	return result, nil
 }
 
 func processAndSendJobs(ctx context.Context, jobsChan <-chan models.Job, stats *models.JobStats, cfg config.Config,
@@ -106,7 +128,6 @@ func processAndSendJobs(ctx context.Context, jobsChan <-chan models.Job, stats *
 	var wg sync.WaitGroup
 
 	for job := range jobsChan {
-		atomic.AddInt64(&stats.TotalJobs, 1)
 		wg.Add(1)
 		sem <- struct{}{}
 

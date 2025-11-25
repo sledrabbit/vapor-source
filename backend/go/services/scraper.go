@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopher-source/config"
@@ -17,7 +18,7 @@ import (
 )
 
 type ScraperClient interface {
-	ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job)
+	ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job, stats *models.JobStats)
 	GetProcessedIDs() map[string]bool
 }
 
@@ -44,7 +45,7 @@ func NewScraperWithKeyset(config config.Config, debugEnabled bool, existingKeySe
 	}
 }
 
-func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job) {
+func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job, stats *models.JobStats) {
 	defer close(jobsChan)
 
 	// create two collectors: one for search results, one for job details
@@ -88,7 +89,13 @@ func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsCh
 
 		if seen {
 			utils.Debug(fmt.Sprintf("\tSkipping already processed job: %s", jobID))
+			if stats != nil {
+				atomic.AddInt64(&stats.SkippedJobs, 1)
+			}
 			return
+		}
+		if stats != nil {
+			atomic.AddInt64(&stats.TotalJobs, 1)
 		}
 
 		// queue job detail page for async processing
