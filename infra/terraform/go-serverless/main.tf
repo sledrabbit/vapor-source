@@ -13,6 +13,28 @@ provider "aws" {
   region = var.aws_region
 }
 
+resource "aws_s3_bucket" "job_id_cache" {
+  bucket = var.job_ids_bucket_name
+}
+
+resource "aws_s3_bucket_public_access_block" "job_id_cache" {
+  bucket                  = aws_s3_bucket.job_id_cache.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "job_id_cache" {
+  bucket = aws_s3_bucket.job_id_cache.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 resource "aws_dynamodb_table" "jobs" {
   name         = var.dynamodb_table_name
   billing_mode = var.dynamodb_billing_mode
@@ -75,6 +97,21 @@ resource "aws_iam_role_policy" "job_scraper" {
           "dynamodb:DescribeTable"
         ]
         Resource = aws_dynamodb_table.jobs.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.job_id_cache.arn}/${var.job_ids_s3_key}"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.job_id_cache.arn
       }
     ]
   })
@@ -103,6 +140,8 @@ resource "aws_lambda_function" "job_scraper" {
       var.environment_variables,
       {
         DYNAMODB_TABLE_NAME = aws_dynamodb_table.jobs.name
+        JOB_IDS_BUCKET      = aws_s3_bucket.job_id_cache.bucket
+        JOB_IDS_S3_KEY      = var.job_ids_s3_key
       }
     )
   }
@@ -134,4 +173,9 @@ output "dynamodb_table_name" {
 output "lambda_function_url" {
   description = "Public Function URL endpoint for the Lambda."
   value       = aws_lambda_function_url.job_scraper.function_url
+}
+
+output "job_ids_bucket_name" {
+  description = "S3 bucket that stores the job ID cache file."
+  value       = aws_s3_bucket.job_id_cache.bucket
 }

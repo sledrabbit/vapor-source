@@ -23,9 +23,12 @@ type Config struct {
 	DefaultQuery    string
 	Filename        string
 	UseJobIDFile    bool
+	UseS3JobIDFile  bool
 	AWSRegion       string
 	DynamoTableName string
 	DynamoEndpoint  string
+	JobIDsBucket    string
+	JobIDsS3Key     string
 }
 
 var (
@@ -52,6 +55,7 @@ func Load() (*Config, error) {
 	}
 
 	useJobIDFile := normalizeBoolString(os.Getenv("USE_JOB_ID_FILE"), !runningInLambda()) == "true"
+	useS3JobIDFile := normalizeBoolString(os.Getenv("USE_S3_JOB_ID_FILE"), runningInLambda()) == "true"
 
 	return &Config{
 		MaxPages:        2,
@@ -65,9 +69,12 @@ func Load() (*Config, error) {
 		DefaultQuery:    query,
 		Filename:        jobIDsPath,
 		UseJobIDFile:    useJobIDFile,
+		UseS3JobIDFile:  useS3JobIDFile,
 		AWSRegion:       getEnvOrDefault("AWS_REGION", "us-west-2"),
 		DynamoTableName: getEnvOrDefault("DYNAMODB_TABLE_NAME", "Jobs"),
 		DynamoEndpoint:  strings.TrimSpace(os.Getenv("DYNAMODB_ENDPOINT")),
+		JobIDsBucket:    strings.TrimSpace(os.Getenv("JOB_IDS_BUCKET")),
+		JobIDsS3Key:     strings.TrimSpace(os.Getenv("JOB_IDS_S3_KEY")),
 	}, nil
 }
 

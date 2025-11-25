@@ -30,10 +30,24 @@ variable "environment_variables" {
     DEBUG_OUTPUT        = "true"
     API_DRY_RUN         = "false"
     USE_JOB_ID_FILE     = "false"
+    USE_S3_JOB_ID_FILE  = "false"
     OPENAI_API_KEY      = ""
     DYNAMODB_TABLE_NAME = "Jobs"
     DYNAMODB_ENDPOINT   = ""
+    JOB_IDS_BUCKET      = ""
+    JOB_IDS_S3_KEY      = ""
   }
+}
+
+variable "job_ids_bucket_name" {
+  description = "Name of the S3 bucket that stores the job ID cache file."
+  type        = string
+}
+
+variable "job_ids_s3_key" {
+  description = "S3 object key for the job ID cache file."
+  type        = string
+  default     = "job-ids.txt"
 }
 
 variable "dynamodb_table_name" {

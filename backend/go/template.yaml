@@ -22,6 +22,11 @@ Parameters:
     Default: "false"
     AllowedValues: ["true", "false"]
     Description: Enable local file caching (off in Lambda).
+  UseS3JobIDFile:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Sync the job ID cache with S3 when enabled.
   OpenAIAPIKey:
     Type: String
     NoEcho: true
@@ -61,6 +66,7 @@ Resources:
           DEBUG_OUTPUT: !Ref DebugOutput
           API_DRY_RUN: !Ref ApiDryRun
           USE_JOB_ID_FILE: !Ref UseJobIDFile
+          USE_S3_JOB_ID_FILE: !Ref UseS3JobIDFile
           OPENAI_API_KEY: !Ref OpenAIAPIKey
           AWS_REGION: !Ref AWSRegion
           DYNAMODB_TABLE_NAME: !Ref DynamoTableName
