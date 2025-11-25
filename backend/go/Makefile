@@ -1,6 +1,10 @@
 SAM_BUILD_DIR ?= .aws-sam/build
 BIN_DIR ?= bin
 
+.PHONY: build-JobScraperFunction
+build-JobScraperFunction:
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o $(ARTIFACTS_DIR)/bootstrap ./cmd/lambda
+
 .PHONY: zip-lambda
 zip-lambda: $(BIN_DIR)/bootstrap
 	zip -j $(BIN_DIR)/lambda.zip $(BIN_DIR)/bootstrap

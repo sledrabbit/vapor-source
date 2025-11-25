@@ -103,12 +103,22 @@ resource "aws_lambda_function" "job_scraper" {
       var.environment_variables,
       {
         DYNAMODB_TABLE_NAME = aws_dynamodb_table.jobs.name
-        AWS_REGION          = var.aws_region
       }
     )
   }
 
   depends_on = [aws_cloudwatch_log_group.job_scraper]
+}
+
+resource "aws_lambda_function_url" "job_scraper" {
+  function_name      = aws_lambda_function.job_scraper.arn
+  authorization_type = "NONE"
+
+  cors {
+    allow_origins = ["*"]
+    allow_methods = ["*"]
+    allow_headers = ["*"]
+  }
 }
 
 output "lambda_function_arn" {
@@ -119,4 +129,9 @@ output "lambda_function_arn" {
 output "dynamodb_table_name" {
   description = "Name of the DynamoDB table used by the Lambda."
   value       = aws_dynamodb_table.jobs.name
+}
+
+output "lambda_function_url" {
+  description = "Public Function URL endpoint for the Lambda."
+  value       = aws_lambda_function_url.job_scraper.function_url
 }

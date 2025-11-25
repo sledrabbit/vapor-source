@@ -31,7 +31,6 @@ variable "environment_variables" {
     API_DRY_RUN         = "false"
     USE_JOB_ID_FILE     = "false"
     OPENAI_API_KEY      = ""
-    AWS_REGION          = "us-west-2"
     DYNAMODB_TABLE_NAME = "Jobs"
     DYNAMODB_ENDPOINT   = ""
   }
