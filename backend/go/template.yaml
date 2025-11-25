@@ -2,6 +2,43 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Job scraping Lambda built from backend/go/cmd/lambda.
 
+Parameters:
+  Query:
+    Type: String
+    Default: software developer
+    Description: Search query passed to the scraper.
+  DebugOutput:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable verbose debug logging.
+  ApiDryRun:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Skip OpenAI/DynamoDB calls when true.
+  UseJobIDFile:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable local file caching (off in Lambda).
+  OpenAIAPIKey:
+    Type: String
+    NoEcho: true
+    Description: API key for OpenAI requests.
+  AWSRegion:
+    Type: String
+    Default: us-west-2
+    Description: AWS region used by the SDK.
+  DynamoTableName:
+    Type: String
+    Default: Jobs
+    Description: Name of the DynamoDB table storing jobs.
+  DynamoEndpoint:
+    Type: String
+    Default: ""
+    Description: Optional override for local DynamoDB endpoint.
+
 Globals:
   Function:
     Runtime: provided.al2023
@@ -20,17 +57,14 @@ Resources:
       Description: Runs the Go scraper pipeline inside Lambda.
       Environment:
         Variables:
-          QUERY: "software engineer"
-          DEBUG_OUTPUT: ""
-          API_DRY_RUN: ""
-          USE_MOCK_JOBS: ""
-          DYNAMODB_ENDPOINT: "http://host.docker.internal:8000"
-          AWS_ACCESS_KEY_ID: "dummy"
-          AWS_SECRET_ACCESS_KEY: "dummy"
-          AWS_REGION: "us-west-2"
-          LLM_PROMPT_PATH: "/var/task/prompt.txt"
-          OPENAI_API_KEY: "" # Ensure this is set in env.json or actual environment for real runs
-          API_SERVER_URL: "http://host.docker.internal:8080/api"
+          QUERY: !Ref Query
+          DEBUG_OUTPUT: !Ref DebugOutput
+          API_DRY_RUN: !Ref ApiDryRun
+          USE_JOB_ID_FILE: !Ref UseJobIDFile
+          OPENAI_API_KEY: !Ref OpenAIAPIKey
+          AWS_REGION: !Ref AWSRegion
+          DYNAMODB_TABLE_NAME: !Ref DynamoTableName
+          DYNAMODB_ENDPOINT: !Ref DynamoEndpoint
       Events:
         ApiEvent:
           Type: HttpApi

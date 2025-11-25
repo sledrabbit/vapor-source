@@ -13,6 +13,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	cfg.UseJobIDFile = true
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

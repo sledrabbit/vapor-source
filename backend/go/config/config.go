@@ -12,16 +12,20 @@ import (
 )
 
 type Config struct {
-	MaxPages       int
-	BaseURL        string
-	RequestDelay   time.Duration
-	OpenAIAPIKey   string
-	Query          string
-	DebugOutput    string
-	ApiDryRun      string
-	MaxConcurrency int
-	DefaultQuery   string
-	Filename       string
+	MaxPages        int
+	BaseURL         string
+	RequestDelay    time.Duration
+	OpenAIAPIKey    string
+	Query           string
+	DebugOutput     string
+	ApiDryRun       string
+	MaxConcurrency  int
+	DefaultQuery    string
+	Filename        string
+	UseJobIDFile    bool
+	AWSRegion       string
+	DynamoTableName string
+	DynamoEndpoint  string
 }
 
 var (
@@ -41,17 +45,29 @@ func Load() (*Config, error) {
 	query := getEnvOrDefault("QUERY", "software developer")
 	jobIDsPath := getEnvOrDefault("JOB_IDS_PATH", defaultJobIDsPath())
 
+	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	apiDryRun := getBoolEnv("API_DRY_RUN", false)
+	if apiKey == "" && apiDryRun != "true" {
+		return nil, fmt.Errorf("OPENAI_API_KEY must be set unless API_DRY_RUN is true")
+	}
+
+	useJobIDFile := normalizeBoolString(os.Getenv("USE_JOB_ID_FILE"), !runningInLambda()) == "true"
+
 	return &Config{
-		MaxPages:       2,
-		BaseURL:        "https://seeker.worksourcewa.com/",
-		RequestDelay:   1 * time.Nanosecond,
-		OpenAIAPIKey:   strings.TrimSpace(os.Getenv("OPENAI_API_KEY")),
-		Query:          query,
-		DebugOutput:    getBoolEnv("DEBUG_OUTPUT", false),
-		ApiDryRun:      getBoolEnv("API_DRY_RUN", false),
-		MaxConcurrency: 25,
-		DefaultQuery:   query,
-		Filename:       jobIDsPath,
+		MaxPages:        2,
+		BaseURL:         "https://seeker.worksourcewa.com/",
+		RequestDelay:    1 * time.Nanosecond,
+		OpenAIAPIKey:    apiKey,
+		Query:           query,
+		DebugOutput:     getBoolEnv("DEBUG_OUTPUT", false),
+		ApiDryRun:       apiDryRun,
+		MaxConcurrency:  25,
+		DefaultQuery:    query,
+		Filename:        jobIDsPath,
+		UseJobIDFile:    useJobIDFile,
+		AWSRegion:       getEnvOrDefault("AWS_REGION", "us-west-2"),
+		DynamoTableName: getEnvOrDefault("DYNAMODB_TABLE_NAME", "Jobs"),
+		DynamoEndpoint:  strings.TrimSpace(os.Getenv("DYNAMODB_ENDPOINT")),
 	}, nil
 }
 

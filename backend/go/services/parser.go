@@ -48,10 +48,11 @@ func (p *parserClientImpl) ParseWithStats(ctx context.Context, job *models.Job) 
 }
 
 func populateJobFromResponse(job *models.Job, res models.OpenAIJobParsingResponse) {
-	if res.IsSoftwareEngineerRelated == false {
+	if !res.IsSoftwareEngineerRelated {
 		utils.Debug(fmt.Sprintf("\t🦉 Filtering out non-software related job (based on AI response): %s", job.Title))
 	}
 
+	job.Description = ""
 	job.ParsedDescription = res.ParsedDescription
 	job.ExpiresDate = res.DeadlineDate
 	job.MinDegree = res.MinDegree

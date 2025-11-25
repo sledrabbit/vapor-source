@@ -23,7 +23,7 @@ type Job struct {
 	MinYearsExperience        int      `json:"minYearsExperience,omitempty"`
 	MinDegree                 string   `json:"minDegree,omitempty"`
 	Domain                    string   `json:"domain,omitempty"`
-	Description               string   `json:"description"`
+	Description               string   `json:"description,omitempty"`
 	ParsedDescription         string   `json:"parsedDescription,omitempty"`
 	S3Pointer                 string   `json:"s3Pointer,omitempty"`
 	Languages                 []string `json:"languages,omitempty"`

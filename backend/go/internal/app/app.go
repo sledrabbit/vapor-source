@@ -22,21 +22,24 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	startTime := time.Now()
 
 	// initialize clients
-	awsConfig, err := services.NewDynamoConfig(ctx)
+	awsConfig, err := services.NewDynamoConfig(ctx, cfg.AWSRegion)
 	if err != nil {
 		return fmt.Errorf("load aws config: %w", err)
 	}
-	dynamoService := services.NewDynamoService(awsConfig, "Jobs")
-	if err := dynamoService.CreateJobsTable(ctx); err != nil {
-		return fmt.Errorf("create DynamoDB table: %w", err)
-	}
+	dynamoService := services.NewDynamoService(awsConfig, cfg.DynamoTableName, cfg.DynamoEndpoint)
 
-	// TODO: replace local file with S3
-	keySet, err := readKeysFromFile(cfg.Filename)
-	if err != nil {
-		return fmt.Errorf("read job ids: %w", err)
+	keySet := make(map[string]bool)
+	keySetInitialSize := 0
+	if cfg.UseJobIDFile {
+		var err error
+		keySet, err = readKeysFromFile(cfg.Filename)
+		if err != nil {
+			return fmt.Errorf("read job ids: %w", err)
+		}
+		keySetInitialSize = len(keySet)
+	} else {
+		utils.Debug("Skipping job ID file cache for this run")
 	}
-	keySetInitialSize := len(keySet)
 
 	openaiService := services.NewOpenAIService()
 	parser := services.NewParserService(openaiService)
@@ -57,13 +60,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	scraper.ScrapeJobs(ctx, cfg.DefaultQuery, jobsChan)
 	processingWg.Wait()
 
-	// TODO: replace local file with S3
-	keySet = scraper.GetProcessedIDs()
-	if err := dynamoService.WriteJobIdsToFile(cfg.Filename, keySet); err != nil {
-		return fmt.Errorf("write job ids: %w", err)
+	if cfg.UseJobIDFile {
+		keySet = scraper.GetProcessedIDs()
+		if err := dynamoService.WriteJobIdsToFile(cfg.Filename, keySet); err != nil {
+			return fmt.Errorf("write job ids: %w", err)
+		}
+		keySetFinalSize := len(keySet)
+		utils.Debug(fmt.Sprintf("💰Jobs added to cache: %d", keySetFinalSize-keySetInitialSize))
 	}
-	keySetFinalSize := len(keySet)
-	utils.Debug(fmt.Sprintf("💰Jobs added to cache: %d", keySetFinalSize-keySetInitialSize))
 
 	executionTime := time.Since(startTime)
 	// print stats
