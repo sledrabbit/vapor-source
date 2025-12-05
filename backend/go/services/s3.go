@@ -1,8 +1,11 @@
 package services
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -12,11 +15,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
+
+	"gopher-source/models"
 )
 
 type S3Client interface {
 	UploadFile(ctx context.Context, bucketName string, objectKey string, fileName string) error
 	DownloadFile(ctx context.Context, bucketName string, objectKey string, fileName string) error
+	WriteJobsToJSONLFile(filename string, jobs []models.Job) error
 }
 
 type s3ClientImpl struct {
@@ -88,4 +94,31 @@ func (s *s3ClientImpl) DownloadFile(ctx context.Context, bucketName string, obje
 	}
 	_, err = file.Write(body)
 	return err
+}
+
+func (s *s3ClientImpl) WriteJobsToJSONLFile(filename string, jobs []models.Job) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("create jsonl file: %w", err)
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	for _, job := range jobs {
+		b, err := json.Marshal(job)
+		if err != nil {
+			return fmt.Errorf("marshal job %s: %w", job.JobId, err)
+		}
+		if _, err := writer.Write(b); err != nil {
+			return fmt.Errorf("write job: %w", err)
+		}
+		if err := writer.WriteByte('\n'); err != nil {
+			return fmt.Errorf("write newline: %w", err)
+		}
+	}
+
+	if err := writer.Flush(); err != nil {
+		return fmt.Errorf("flush writer: %w", err)
+	}
+	return nil
 }

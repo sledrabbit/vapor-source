@@ -58,7 +58,7 @@ func (o *openaiClientImpl) UnmarshalResponse(responseText string) (models.OpenAI
 	var res models.OpenAIJobParsingResponse
 	err := json.Unmarshal([]byte(responseText), &res)
 	if err != nil {
-		return models.OpenAIJobParsingResponse{}, fmt.Errorf("Error decoding OpenAI response: %v", err)
+		return models.OpenAIJobParsingResponse{}, fmt.Errorf("error decoding OpenAI response: %v", err)
 	}
 	return res, nil
 }
@@ -85,7 +85,7 @@ func (o *openaiClientImpl) executeWithRetry(ctx context.Context, operation func(
 		}
 		return result, nil
 	}
-	return openai.ChatCompletion{}, fmt.Errorf("\t❌ Max retry attempts of %d reached. Operation failed.", maxRetries)
+	return openai.ChatCompletion{}, fmt.Errorf("\t❌ Max retry attempts of %d reached. Operation failed", maxRetries)
 }
 
 func generateSchema[T any]() interface{} {

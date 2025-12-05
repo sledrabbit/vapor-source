@@ -95,6 +95,7 @@ func (d *dynamoDBClientImpl) queryJobs(ctx context.Context, keyCondition string,
 		IndexName:                 aws.String(postedDateIndexName),
 		KeyConditionExpression:    aws.String(keyCondition),
 		ExpressionAttributeValues: values,
+		ScanIndexForward:          aws.Bool(false),
 	}
 
 	paginator := dynamodb.NewQueryPaginator(d.client, input)

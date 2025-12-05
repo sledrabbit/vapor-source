@@ -1,19 +1,24 @@
 package services
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+
+	"gopher-source/models"
 )
 
 func TestS3UploadFileAndWait(t *testing.T) {
@@ -126,4 +131,48 @@ func parsePath(path string) (bucket, key string) {
 		return parts[0], ""
 	}
 	return parts[0], parts[1]
+}
+
+func TestWriteJobsToJSONLFile_Success(t *testing.T) {
+	svc := &s3ClientImpl{}
+	filename := filepath.Join(t.TempDir(), "jobs.jsonl")
+	jobs := []models.Job{
+		{JobId: "1", Title: "One", PostedDate: "2025-01-01", PostedTime: "2025-01-01T00:00:00Z"},
+		{JobId: "2", Title: "Two", PostedDate: "2025-01-01", PostedTime: "2025-01-01T01:00:00Z"},
+	}
+
+	if err := svc.WriteJobsToJSONLFile(filename, jobs); err != nil {
+		t.Fatalf("WriteJobsToJSONLFile returned error: %v", err)
+	}
+
+	file, err := os.Open(filename)
+	if err != nil {
+		t.Fatalf("open jsonl file: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var got []models.Job
+	for scanner.Scan() {
+		var job models.Job
+		if err := json.Unmarshal(scanner.Bytes(), &job); err != nil {
+			t.Fatalf("unmarshal job line: %v", err)
+		}
+		got = append(got, job)
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scanner error: %v", err)
+	}
+
+	if !reflect.DeepEqual(got, jobs) {
+		t.Fatalf("jobs mismatch: got %#v want %#v", got, jobs)
+	}
+}
+
+func TestWriteJobsToJSONLFile_CreateError(t *testing.T) {
+	svc := &s3ClientImpl{}
+	filename := filepath.Join(t.TempDir(), "missing", "jobs.jsonl")
+	if err := svc.WriteJobsToJSONLFile(filename, nil); err == nil {
+		t.Fatalf("expected error for unwritable path, got nil")
+	}
 }

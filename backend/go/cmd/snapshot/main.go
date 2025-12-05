@@ -34,11 +34,21 @@ func handler(ctx context.Context) (Response, error) {
 	}
 
 	dynamoService := services.NewDynamoService(awscfg, cfg.DynamoTableName, cfg.DynamoEndpoint)
+	s3Service := services.NewS3Service(awscfg)
 
-	_, err = dynamoService.QueryJobsByPostedDate(ctx, time.Now().Format("2006-01-02"))
+	// get sorted jobs in descending order
+	sortedJobs, err := dynamoService.QueryJobsByPostedDate(ctx, time.Now().Format("2006-01-02"))
 	if err != nil {
 		return errorResponse(http.StatusInternalServerError, fmt.Errorf("query DynamoDB: %w", err))
 	}
+
+	// write jobs to jsonl file
+	s3File := time.Now().Format("2006-01-02") + ".jsonl"
+	if err := s3Service.WriteJobsToJSONLFile(s3File, sortedJobs); err != nil {
+		return errorResponse(http.StatusInternalServerError, fmt.Errorf("write jobs jsonl: %w", err))
+	}
+
+	// TODO: upload to S3
 
 	functionDuration := time.Since(start)
 	print(functionDuration)
