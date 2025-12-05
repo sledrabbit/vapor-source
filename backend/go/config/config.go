@@ -29,6 +29,8 @@ type Config struct {
 	DynamoEndpoint  string
 	JobIDsBucket    string
 	JobIDsS3Key     string
+	SnapshotBucket  string
+	SnapshotS3Key   string
 }
 
 var (
@@ -58,7 +60,7 @@ func Load() (*Config, error) {
 	useS3JobIDFile := normalizeBoolString(os.Getenv("USE_S3_JOB_ID_FILE"), runningInLambda()) == "true"
 
 	return &Config{
-		MaxPages:        2,
+		MaxPages:        5,
 		BaseURL:         "https://seeker.worksourcewa.com/",
 		RequestDelay:    1 * time.Nanosecond,
 		OpenAIAPIKey:    apiKey,
@@ -75,6 +77,8 @@ func Load() (*Config, error) {
 		DynamoEndpoint:  strings.TrimSpace(os.Getenv("DYNAMODB_ENDPOINT")),
 		JobIDsBucket:    strings.TrimSpace(os.Getenv("JOB_IDS_BUCKET")),
 		JobIDsS3Key:     strings.TrimSpace(os.Getenv("JOB_IDS_S3_KEY")),
+		SnapshotBucket:  strings.TrimSpace(os.Getenv("SNAPSHOT_BUCKET")),
+		SnapshotS3Key:   strings.TrimSpace(os.Getenv("SNAPSHOT_S3_KEY")),
 	}, nil
 }
 

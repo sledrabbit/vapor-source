@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -113,4 +114,81 @@ func containsLine(contents, target string) bool {
 		}
 	}
 	return false
+}
+
+func TestQueryJobsByPostedDate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("X-Amz-Target") {
+		case "DynamoDB_20120810.Query":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("failed to read request body: %v", err)
+			}
+			defer r.Body.Close()
+			payload := string(body)
+			if !strings.Contains(payload, postedDateIndexName) {
+				t.Fatalf("expected index name %s in payload %s", postedDateIndexName, payload)
+			}
+			if !strings.Contains(payload, "PostedDate = :date") {
+				t.Fatalf("expected equality expression in payload %s", payload)
+			}
+			if !strings.Contains(payload, "2025-11-04") {
+				t.Fatalf("expected requested date in payload %s", payload)
+			}
+			w.Header().Set("Content-Type", "application/x-amz-json-1.0")
+			fmt.Fprint(w, `{"Items":[{"JobId":{"S":"1"},"Title":{"S":"Engineer"},"PostedDate":{"S":"2025-11-04"}}]}`)
+		default:
+			t.Fatalf("unexpected target %s", r.Header.Get("X-Amz-Target"))
+		}
+	}))
+	defer server.Close()
+
+	client := newTestDynamoClient(server.URL)
+	jobs, err := client.QueryJobsByPostedDate(context.Background(), "2025-11-04")
+	if err != nil {
+		t.Fatalf("QueryJobsByPostedDate returned error: %v", err)
+	}
+	if len(jobs) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs))
+	}
+	if jobs[0].JobId != "1" || jobs[0].PostedDate != "2025-11-04" {
+		t.Fatalf("unexpected job returned: %+v", jobs[0])
+	}
+}
+
+func TestQueryJobsByDateRange(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("X-Amz-Target") {
+		case "DynamoDB_20120810.Query":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("failed to read request body: %v", err)
+			}
+			defer r.Body.Close()
+			payload := string(body)
+			if !strings.Contains(payload, "BETWEEN :start AND :end") {
+				t.Fatalf("expected BETWEEN expression in payload %s", payload)
+			}
+			if !strings.Contains(payload, "2025-11-01") || !strings.Contains(payload, "2025-11-07") {
+				t.Fatalf("expected start and end dates in payload %s", payload)
+			}
+			w.Header().Set("Content-Type", "application/x-amz-json-1.0")
+			fmt.Fprint(w, `{"Items":[{"JobId":{"S":"1"},"PostedDate":{"S":"2025-11-01"}},{"JobId":{"S":"2"},"PostedDate":{"S":"2025-11-05"}}]}`)
+		default:
+			t.Fatalf("unexpected target %s", r.Header.Get("X-Amz-Target"))
+		}
+	}))
+	defer server.Close()
+
+	client := newTestDynamoClient(server.URL)
+	jobs, err := client.QueryJobsByDateRange(context.Background(), "2025-11-01", "2025-11-07")
+	if err != nil {
+		t.Fatalf("QueryJobsByDateRange returned error: %v", err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("expected 2 jobs, got %d", len(jobs))
+	}
+	if jobs[0].JobId != "1" || jobs[1].JobId != "2" {
+		t.Fatalf("unexpected jobs returned: %+v", jobs)
+	}
 }

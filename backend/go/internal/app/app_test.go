@@ -40,6 +40,14 @@ func (f *fakeDynamo) PutJob(ctx context.Context, job *models.Job) error {
 	return nil
 }
 
+func (f *fakeDynamo) QueryJobsByPostedDate(ctx context.Context, date string) ([]models.Job, error) {
+	return nil, nil
+}
+
+func (f *fakeDynamo) QueryJobsByDateRange(ctx context.Context, startDate, endDate string) ([]models.Job, error) {
+	return nil, nil
+}
+
 func (f *fakeDynamo) GetAllJobIds(ctx context.Context) (map[string]bool, error) {
 	return map[string]bool{}, nil
 }

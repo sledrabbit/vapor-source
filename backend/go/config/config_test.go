@@ -145,6 +145,8 @@ func TestLoadSuccess(t *testing.T) {
 	t.Setenv("DYNAMODB_ENDPOINT", "http://localhost:9000")
 	t.Setenv("JOB_IDS_BUCKET", "jobs-bucket")
 	t.Setenv("JOB_IDS_S3_KEY", "ids.txt")
+	t.Setenv("SNAPSHOT_BUCKET", "snapshot-bucket")
+	t.Setenv("SNAPSHOT_S3_KEY", "snapshot-key.txt")
 
 	cfg, err := Load()
 	if err != nil {
@@ -186,6 +188,12 @@ func TestLoadSuccess(t *testing.T) {
 	}
 	if cfg.JobIDsS3Key != "ids.txt" {
 		t.Fatalf("expected JobIDsS3Key override, got %q", cfg.JobIDsS3Key)
+	}
+	if cfg.SnapshotBucket != "snapshot-bucket" {
+		t.Fatalf("expected SnapshotBucket override, got %q", cfg.SnapshotBucket)
+	}
+	if cfg.SnapshotS3Key != "snapshot-key.txt" {
+		t.Fatalf("expected SnapshotS3Key override, got %q", cfg.SnapshotS3Key)
 	}
 }
 

@@ -31,7 +31,7 @@ type RunResult struct {
 	JobCacheS3Key       string
 }
 
-// Run executes the shared scraping pipeline used by both local and Lambda binaries.
+// Run executes the shared scraping pipeline used by both local and scraper binaries.
 func Run(ctx context.Context, cfg *config.Config) (*RunResult, error) {
 	startTime := time.Now()
 	result := &RunResult{

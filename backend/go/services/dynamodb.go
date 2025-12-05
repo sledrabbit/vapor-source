@@ -12,6 +12,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -19,6 +20,8 @@ import (
 
 type DynamoDBClient interface {
 	PutJob(ctx context.Context, job *models.Job) error
+	QueryJobsByPostedDate(ctx context.Context, date string) ([]models.Job, error)
+	QueryJobsByDateRange(ctx context.Context, startDate, endDate string) ([]models.Job, error)
 	GetAllJobIds(ctx context.Context) (map[string]bool, error)
 	WriteJobIdsToFile(filename string, keySet map[string]bool) error
 }
@@ -27,6 +30,8 @@ type dynamoDBClientImpl struct {
 	client    *dynamodb.Client
 	tableName string
 }
+
+const postedDateIndexName = "PostedDate-Index"
 
 func NewDynamoService(cfg aws.Config, tableName, endpoint string) DynamoDBClient {
 	client := dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
@@ -47,6 +52,69 @@ func NewDynamoConfig(ctx context.Context, region string) (aws.Config, error) {
 		return aws.Config{}, fmt.Errorf("load aws config: %w", err)
 	}
 	return cfg, nil
+}
+
+func (d *dynamoDBClientImpl) QueryJobsByPostedDate(ctx context.Context, date string) ([]models.Job, error) {
+	date = strings.TrimSpace(date)
+	if date == "" {
+		return nil, fmt.Errorf("posted date is required")
+	}
+
+	values := map[string]types.AttributeValue{
+		":date": &types.AttributeValueMemberS{Value: date},
+	}
+
+	return d.queryJobs(ctx, "PostedDate = :date", values)
+}
+
+func (d *dynamoDBClientImpl) QueryJobsByDateRange(ctx context.Context, startDate, endDate string) ([]models.Job, error) {
+	startDate = strings.TrimSpace(startDate)
+	endDate = strings.TrimSpace(endDate)
+	if startDate == "" || endDate == "" {
+		return nil, fmt.Errorf("start and end dates are required")
+	}
+
+	values := map[string]types.AttributeValue{
+		":start": &types.AttributeValueMemberS{Value: startDate},
+		":end":   &types.AttributeValueMemberS{Value: endDate},
+	}
+
+	return d.queryJobs(ctx, "PostedDate BETWEEN :start AND :end", values)
+}
+
+func (d *dynamoDBClientImpl) queryJobs(ctx context.Context, keyCondition string, values map[string]types.AttributeValue) ([]models.Job, error) {
+	if strings.TrimSpace(keyCondition) == "" {
+		return nil, fmt.Errorf("key condition expression is required")
+	}
+	if d.client == nil {
+		return nil, fmt.Errorf("dynamodb client is not initialized")
+	}
+
+	input := &dynamodb.QueryInput{
+		TableName:                 aws.String(d.tableName),
+		IndexName:                 aws.String(postedDateIndexName),
+		KeyConditionExpression:    aws.String(keyCondition),
+		ExpressionAttributeValues: values,
+	}
+
+	paginator := dynamodb.NewQueryPaginator(d.client, input)
+	var jobs []models.Job
+	for paginator.HasMorePages() {
+		output, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("query jobs: %w", err)
+		}
+		if len(output.Items) == 0 {
+			continue
+		}
+		var pageJobs []models.Job
+		if err := attributevalue.UnmarshalListOfMaps(output.Items, &pageJobs); err != nil {
+			return nil, fmt.Errorf("unmarshal jobs: %w", err)
+		}
+		jobs = append(jobs, pageJobs...)
+	}
+
+	return jobs, nil
 }
 
 func (d *dynamoDBClientImpl) PutJob(ctx context.Context, job *models.Job) error {
@@ -77,7 +145,7 @@ func (d *dynamoDBClientImpl) PutJob(ctx context.Context, job *models.Job) error 
 		}
 		return fmt.Errorf("failed to put item: %w", err)
 	}
-	utils.Debug("\t📦 Post successful: for job")
+	utils.Debug(fmt.Sprintf("\t📦 Post successful: for job %s", job.Title))
 	return nil
 }
 
