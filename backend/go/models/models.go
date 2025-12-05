@@ -18,6 +18,7 @@ type Job struct {
 	Modality                  string   `json:"modality,omitempty"`
 	PostedDate                string   `json:"postedDate"`
 	ExpiresDate               string   `json:"expiresDate,omitempty"`
+	PostedTime                string   `json:"postedTime"`
 	Salary                    string   `json:"salary"`
 	URL                       string   `json:"url"`
 	MinYearsExperience        int      `json:"minYearsExperience,omitempty"`

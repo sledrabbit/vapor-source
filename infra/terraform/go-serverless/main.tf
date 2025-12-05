@@ -52,10 +52,15 @@ resource "aws_dynamodb_table" "jobs" {
     type = "S"
   }
 
+  attribute {
+    name = "PostedTime"
+    type = "S"
+  }
+
   global_secondary_index {
     name            = "PostedDate-Index"
     hash_key        = "PostedDate"
-    range_key       = "JobId"
+    range_key       = "PostedTime"
     projection_type = "ALL"
   }
 }

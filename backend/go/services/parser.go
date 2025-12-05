@@ -7,6 +7,7 @@ import (
 	"gopher-source/utils"
 	"log"
 	"strings"
+	"time"
 )
 
 type ParserClient interface {
@@ -69,6 +70,7 @@ func populateJobFromResponse(job *models.Job, res models.OpenAIJobParsingRespons
 
 	job.Languages = res.Languages
 	job.Technologies = res.Technologies
+	job.PostedTime = time.Now().UTC().Format(time.RFC3339Nano)
 
 	utils.Debug(fmt.Sprintf("\t🤖 Analyzing job: %s/", job.Title))
 }
