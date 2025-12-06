@@ -16,7 +16,6 @@ type fakeOpenAIClient struct {
 	sendErr      error
 	unmarshalRes models.OpenAIJobParsingResponse
 	unmarshalErr error
-	calls        int
 }
 
 func (f *fakeOpenAIClient) SendMessage(ctx context.Context, message string) (openai.ChatCompletion, error) {

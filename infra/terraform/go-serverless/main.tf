@@ -35,6 +35,28 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "job_id_cache" {
   }
 }
 
+resource "aws_s3_bucket" "snapshots" {
+  bucket = var.snapshot_bucket_name
+}
+
+resource "aws_s3_bucket_public_access_block" "snapshots" {
+  bucket                  = aws_s3_bucket.snapshots.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "snapshots" {
+  bucket = aws_s3_bucket.snapshots.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 resource "aws_dynamodb_table" "jobs" {
   name         = var.dynamodb_table_name
   billing_mode = var.dynamodb_billing_mode
@@ -77,12 +99,12 @@ data "aws_iam_policy_document" "lambda_assume" {
 }
 
 resource "aws_iam_role" "job_scraper" {
-  name               = "${var.lambda_function_name}-role"
+  name               = "${var.scraper_lambda_function_name}-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
 resource "aws_iam_role_policy" "job_scraper" {
-  name = "${var.lambda_function_name}-inline"
+  name = "${var.scraper_lambda_function_name}-inline"
   role = aws_iam_role.job_scraper.id
 
   policy = jsonencode({
@@ -117,24 +139,40 @@ resource "aws_iam_role_policy" "job_scraper" {
           "s3:ListBucket"
         ]
         Resource = aws_s3_bucket.job_id_cache.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:HeadObject"
+        ]
+        Resource = "${aws_s3_bucket.snapshots.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.snapshots.arn
       }
     ]
   })
 }
 
 resource "aws_cloudwatch_log_group" "job_scraper" {
-  name              = "/aws/lambda/${var.lambda_function_name}"
+  name              = "/aws/lambda/${var.scraper_lambda_function_name}"
   retention_in_days = 14
 }
 
 resource "aws_lambda_function" "job_scraper" {
-  function_name = var.lambda_function_name
-  description   = var.lambda_description
+  function_name = var.scraper_lambda_function_name
+  description   = var.scraper_lambda_description
   role          = aws_iam_role.job_scraper.arn
 
   architectures    = ["arm64"]
-  filename         = var.lambda_zip_path
-  source_code_hash = filebase64sha256(var.lambda_zip_path)
+  filename         = var.scraper_lambda_zip_path
+  source_code_hash = filebase64sha256(var.scraper_lambda_zip_path)
   handler          = "bootstrap"
   runtime          = "provided.al2023"
   timeout          = 900
@@ -142,11 +180,12 @@ resource "aws_lambda_function" "job_scraper" {
 
   environment {
     variables = merge(
-      var.environment_variables,
+      var.scraper_environment_variables,
       {
         DYNAMODB_TABLE_NAME = aws_dynamodb_table.jobs.name
         JOB_IDS_BUCKET      = aws_s3_bucket.job_id_cache.bucket
         JOB_IDS_S3_KEY      = var.job_ids_s3_key
+        SNAPSHOT_BUCKET     = aws_s3_bucket.snapshots.bucket
       }
     )
   }
@@ -156,6 +195,97 @@ resource "aws_lambda_function" "job_scraper" {
 
 resource "aws_lambda_function_url" "job_scraper" {
   function_name      = aws_lambda_function.job_scraper.arn
+  authorization_type = "NONE"
+
+  cors {
+    allow_origins = ["*"]
+    allow_methods = ["*"]
+    allow_headers = ["*"]
+  }
+}
+
+resource "aws_iam_role" "job_snapshot" {
+  name               = "${var.snapshot_lambda_function_name}-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
+}
+
+resource "aws_iam_role_policy" "job_snapshot" {
+  name = "${var.snapshot_lambda_function_name}-inline"
+  role = aws_iam_role.job_snapshot.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query",
+          "dynamodb:DescribeTable",
+          "dynamodb:Scan"
+        ]
+        Resource = [
+          aws_dynamodb_table.jobs.arn,
+          "${aws_dynamodb_table.jobs.arn}/index/PostedDate-Index"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:HeadObject"
+        ]
+        Resource = "${aws_s3_bucket.snapshots.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.snapshots.arn
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_log_group" "job_snapshot" {
+  name              = "/aws/lambda/${var.snapshot_lambda_function_name}"
+  retention_in_days = 14
+}
+
+resource "aws_lambda_function" "job_snapshot" {
+  function_name = var.snapshot_lambda_function_name
+  description   = var.snapshot_lambda_description
+  role          = aws_iam_role.job_snapshot.arn
+
+  architectures    = ["arm64"]
+  filename         = var.snapshot_lambda_zip_path
+  source_code_hash = filebase64sha256(var.snapshot_lambda_zip_path)
+  handler          = "bootstrap"
+  runtime          = "provided.al2023"
+  timeout          = 900
+  memory_size      = 128
+
+  environment {
+    variables = merge(
+      var.snapshot_environment_variables,
+      {
+        DYNAMODB_TABLE_NAME = aws_dynamodb_table.jobs.name
+        SNAPSHOT_BUCKET     = aws_s3_bucket.snapshots.bucket
+      }
+    )
+  }
+
+  depends_on = [aws_cloudwatch_log_group.job_snapshot]
+}
+
+resource "aws_lambda_function_url" "job_snapshot" {
+  function_name      = aws_lambda_function.job_snapshot.arn
   authorization_type = "NONE"
 
   cors {
@@ -183,4 +313,19 @@ output "lambda_function_url" {
 output "job_ids_bucket_name" {
   description = "S3 bucket that stores the job ID cache file."
   value       = aws_s3_bucket.job_id_cache.bucket
+}
+
+output "snapshot_bucket_name" {
+  description = "S3 bucket for JSONL snapshots generated by the snapshot Lambda."
+  value       = aws_s3_bucket.snapshots.bucket
+}
+
+output "snapshot_lambda_function_arn" {
+  description = "ARN of the snapshot Lambda function."
+  value       = aws_lambda_function.job_snapshot.arn
+}
+
+output "snapshot_lambda_function_url" {
+  description = "Function URL endpoint for triggering the snapshot Lambda."
+  value       = aws_lambda_function_url.job_snapshot.function_url
 }

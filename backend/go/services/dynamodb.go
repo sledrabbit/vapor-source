@@ -21,7 +21,6 @@ import (
 type DynamoDBClient interface {
 	PutJob(ctx context.Context, job *models.Job) error
 	QueryJobsByPostedDate(ctx context.Context, date string) ([]models.Job, error)
-	QueryJobsByDateRange(ctx context.Context, startDate, endDate string) ([]models.Job, error)
 	GetAllJobIds(ctx context.Context) (map[string]bool, error)
 	WriteJobIdsToFile(filename string, keySet map[string]bool) error
 }
@@ -65,21 +64,6 @@ func (d *dynamoDBClientImpl) QueryJobsByPostedDate(ctx context.Context, date str
 	}
 
 	return d.queryJobs(ctx, "PostedDate = :date", values)
-}
-
-func (d *dynamoDBClientImpl) QueryJobsByDateRange(ctx context.Context, startDate, endDate string) ([]models.Job, error) {
-	startDate = strings.TrimSpace(startDate)
-	endDate = strings.TrimSpace(endDate)
-	if startDate == "" || endDate == "" {
-		return nil, fmt.Errorf("start and end dates are required")
-	}
-
-	values := map[string]types.AttributeValue{
-		":start": &types.AttributeValueMemberS{Value: startDate},
-		":end":   &types.AttributeValueMemberS{Value: endDate},
-	}
-
-	return d.queryJobs(ctx, "PostedDate BETWEEN :start AND :end", values)
 }
 
 func (d *dynamoDBClientImpl) queryJobs(ctx context.Context, keyCondition string, values map[string]types.AttributeValue) ([]models.Job, error) {

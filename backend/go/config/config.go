@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -12,25 +13,27 @@ import (
 )
 
 type Config struct {
-	MaxPages        int
-	BaseURL         string
-	RequestDelay    time.Duration
-	OpenAIAPIKey    string
-	Query           string
-	DebugOutput     string
-	ApiDryRun       string
-	MaxConcurrency  int
-	DefaultQuery    string
-	Filename        string
-	UseJobIDFile    bool
-	UseS3JobIDFile  bool
-	AWSRegion       string
-	DynamoTableName string
-	DynamoEndpoint  string
-	JobIDsBucket    string
-	JobIDsS3Key     string
-	SnapshotBucket  string
-	SnapshotS3Key   string
+	MaxPages          int
+	BaseURL           string
+	RequestDelay      time.Duration
+	OpenAIAPIKey      string
+	Query             string
+	DebugOutput       string
+	ApiDryRun         string
+	MaxConcurrency    int
+	DefaultQuery      string
+	Filename          string
+	UseJobIDFile      bool
+	UseS3JobIDFile    bool
+	AWSRegion         string
+	DynamoTableName   string
+	DynamoEndpoint    string
+	JobIDsBucket      string
+	JobIDsS3Key       string
+	SnapshotBucket    string
+	SnapshotS3Key     string
+	SnapshotStartDate string
+	SnapshotEndDate   string
 }
 
 var (
@@ -60,25 +63,27 @@ func Load() (*Config, error) {
 	useS3JobIDFile := normalizeBoolString(os.Getenv("USE_S3_JOB_ID_FILE"), runningInLambda()) == "true"
 
 	return &Config{
-		MaxPages:        5,
-		BaseURL:         "https://seeker.worksourcewa.com/",
-		RequestDelay:    1 * time.Nanosecond,
-		OpenAIAPIKey:    apiKey,
-		Query:           query,
-		DebugOutput:     getBoolEnv("DEBUG_OUTPUT", false),
-		ApiDryRun:       apiDryRun,
-		MaxConcurrency:  25,
-		DefaultQuery:    query,
-		Filename:        jobIDsPath,
-		UseJobIDFile:    useJobIDFile,
-		UseS3JobIDFile:  useS3JobIDFile,
-		AWSRegion:       getEnvOrDefault("AWS_REGION", "us-west-2"),
-		DynamoTableName: getEnvOrDefault("DYNAMODB_TABLE_NAME", "Jobs"),
-		DynamoEndpoint:  strings.TrimSpace(os.Getenv("DYNAMODB_ENDPOINT")),
-		JobIDsBucket:    strings.TrimSpace(os.Getenv("JOB_IDS_BUCKET")),
-		JobIDsS3Key:     strings.TrimSpace(os.Getenv("JOB_IDS_S3_KEY")),
-		SnapshotBucket:  strings.TrimSpace(os.Getenv("SNAPSHOT_BUCKET")),
-		SnapshotS3Key:   strings.TrimSpace(os.Getenv("SNAPSHOT_S3_KEY")),
+		MaxPages:          getIntEnv("MAX_PAGES", 5),
+		BaseURL:           "https://seeker.worksourcewa.com/",
+		RequestDelay:      1 * time.Nanosecond,
+		OpenAIAPIKey:      apiKey,
+		Query:             query,
+		DebugOutput:       getBoolEnv("DEBUG_OUTPUT", false),
+		ApiDryRun:         apiDryRun,
+		MaxConcurrency:    25,
+		DefaultQuery:      query,
+		Filename:          jobIDsPath,
+		UseJobIDFile:      useJobIDFile,
+		UseS3JobIDFile:    useS3JobIDFile,
+		AWSRegion:         getEnvOrDefault("AWS_REGION", "us-west-2"),
+		DynamoTableName:   getEnvOrDefault("DYNAMODB_TABLE_NAME", "Jobs"),
+		DynamoEndpoint:    strings.TrimSpace(os.Getenv("DYNAMODB_ENDPOINT")),
+		JobIDsBucket:      strings.TrimSpace(os.Getenv("JOB_IDS_BUCKET")),
+		JobIDsS3Key:       strings.TrimSpace(os.Getenv("JOB_IDS_S3_KEY")),
+		SnapshotBucket:    strings.TrimSpace(os.Getenv("SNAPSHOT_BUCKET")),
+		SnapshotS3Key:     strings.TrimSpace(os.Getenv("SNAPSHOT_S3_KEY")),
+		SnapshotStartDate: strings.TrimSpace(os.Getenv("SNAPSHOT_START_DATE")),
+		SnapshotEndDate:   strings.TrimSpace(os.Getenv("SNAPSHOT_END_DATE")),
 	}, nil
 }
 
@@ -114,6 +119,17 @@ func getBoolEnv(key string, fallback bool) string {
 		return normalizeBoolString(value, fallback)
 	}
 	return boolToString(fallback)
+}
+
+func getIntEnv(key string, fallback int) int {
+	if value, ok := os.LookupEnv(key); ok {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			if parsed, err := strconv.Atoi(trimmed); err == nil {
+				return parsed
+			}
+		}
+	}
+	return fallback
 }
 
 func normalizeBoolString(value string, fallback bool) string {
