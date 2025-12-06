@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"gopher-source/config"
 	"gopher-source/models"
@@ -69,7 +72,11 @@ func handler(ctx context.Context) (Response, error) {
 
 	// upload snapshot files to s3
 	groupedJobs := groupJobsByPostedDate(sortedJobs, startDate)
-	if err := writeAndUploadSnapshots(ctx, groupedJobs, cfg, s3Service); err != nil {
+	filesWritten, err := writeAndUploadSnapshots(ctx, groupedJobs, cfg, s3Service)
+	if err != nil {
+		return errorResponse(http.StatusInternalServerError, err)
+	}
+	if err := updateSnapshotManifest(ctx, cfg, s3Service, filesWritten); err != nil {
 		return errorResponse(http.StatusInternalServerError, err)
 	}
 
@@ -159,7 +166,7 @@ func groupJobsByPostedDate(jobs []models.Job, fallbackDate string) map[string][]
 	return grouped
 }
 
-func writeAndUploadSnapshots(ctx context.Context, groups map[string][]models.Job, cfg *config.Config, s3Service services.S3Client) error {
+func writeAndUploadSnapshots(ctx context.Context, groups map[string][]models.Job, cfg *config.Config, s3Service services.S3Client) ([]snapshotFileMetadata, error) {
 	var dates []string
 	for date := range groups {
 		dates = append(dates, date)
@@ -167,24 +174,159 @@ func writeAndUploadSnapshots(ctx context.Context, groups map[string][]models.Job
 	sort.Strings(dates)
 
 	tempDir := os.TempDir()
+	var written []snapshotFileMetadata
 	for _, date := range dates {
 		filename := fmt.Sprintf("%s.jsonl", date)
 		localPath := filepath.Join(tempDir, filename)
 
 		if err := s3Service.WriteJobsToJSONLFile(localPath, groups[date]); err != nil {
-			return fmt.Errorf("write jobs for %s: %w", date, err)
+			return nil, fmt.Errorf("write jobs for %s: %w", date, err)
 		}
 
-		objectKey := filename
-		if trimmed := strings.TrimSpace(cfg.SnapshotS3Key); trimmed != "" {
-			objectKey = fmt.Sprintf("%s/%s", strings.TrimSuffix(trimmed, "/"), filename)
-		}
-
+		objectKey := snapshotObjectKey(cfg, filename)
 		if err := s3Service.UploadFile(ctx, cfg.SnapshotBucket, objectKey, localPath); err != nil {
-			return fmt.Errorf("upload snapshot %s: %w", date, err)
+			return nil, fmt.Errorf("upload snapshot %s: %w", date, err)
 		}
 		log.Printf("snapshot: wrote %d jobs to s3://%s/%s", len(groups[date]), cfg.SnapshotBucket, objectKey)
+		written = append(written, snapshotFileMetadata{
+			Date:     date,
+			Key:      objectKey,
+			JobCount: len(groups[date]),
+		})
 		_ = os.Remove(localPath)
 	}
+	return written, nil
+}
+
+func updateSnapshotManifest(ctx context.Context, cfg *config.Config, s3Service services.S3Client, files []snapshotFileMetadata) error {
+	if len(files) == 0 {
+		log.Printf("snapshot: no files written; skipping manifest update")
+		return nil
+	}
+
+	manifestKey := snapshotManifestKey(cfg)
+	existing, err := loadSnapshotManifest(ctx, cfg, s3Service, manifestKey)
+	if err != nil {
+		return fmt.Errorf("load snapshot manifest: %w", err)
+	}
+
+	entries := make(map[string]snapshotManifestEntry)
+	for _, entry := range existing {
+		entries[entry.Date] = entry
+	}
+
+	for _, file := range files {
+		entries[file.Date] = snapshotManifestEntry{
+			Date:      file.Date,
+			Key:       file.Key,
+			JobCount:  file.JobCount,
+			UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+		}
+	}
+
+	manifest := make([]snapshotManifestEntry, 0, len(entries))
+	for _, entry := range entries {
+		manifest = append(manifest, entry)
+	}
+	sort.Slice(manifest, func(i, j int) bool {
+		if manifest[i].Date == manifest[j].Date {
+			return manifest[i].UpdatedAt > manifest[j].UpdatedAt
+		}
+		return manifest[i].Date > manifest[j].Date
+	})
+
+	if err := writeSnapshotManifest(ctx, cfg, s3Service, manifestKey, manifest); err != nil {
+		return fmt.Errorf("write snapshot manifest: %w", err)
+	}
+
+	log.Printf("snapshot: manifest updated (%d entries) at s3://%s/%s", len(manifest), cfg.SnapshotBucket, manifestKey)
 	return nil
+}
+
+func loadSnapshotManifest(ctx context.Context, cfg *config.Config, s3Service services.S3Client, manifestKey string) ([]snapshotManifestEntry, error) {
+	tmpFile, err := os.CreateTemp("", "snapshot-manifest-*.json")
+	if err != nil {
+		return nil, fmt.Errorf("create manifest temp file: %w", err)
+	}
+	path := tmpFile.Name()
+	_ = tmpFile.Close()
+	defer os.Remove(path)
+
+	if err := s3Service.DownloadFile(ctx, cfg.SnapshotBucket, manifestKey, path); err != nil {
+		var noKey *types.NoSuchKey
+		if errors.As(err, &noKey) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read manifest: %w", err)
+	}
+	content := bytes.TrimSpace(data)
+	if len(content) == 0 {
+		return nil, nil
+	}
+
+	var entries []snapshotManifestEntry
+	if err := json.Unmarshal(content, &entries); err != nil {
+		return nil, fmt.Errorf("unmarshal manifest: %w", err)
+	}
+	return entries, nil
+}
+
+func writeSnapshotManifest(ctx context.Context, cfg *config.Config, s3Service services.S3Client, manifestKey string, entries []snapshotManifestEntry) error {
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal manifest: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp("", "snapshot-manifest-*.json")
+	if err != nil {
+		return fmt.Errorf("create manifest file: %w", err)
+	}
+	path := tmpFile.Name()
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("write manifest temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close manifest temp file: %w", err)
+	}
+	defer os.Remove(path)
+
+	if err := s3Service.UploadFile(ctx, cfg.SnapshotBucket, manifestKey, path); err != nil {
+		return err
+	}
+	return nil
+}
+
+func snapshotObjectKey(cfg *config.Config, filename string) string {
+	prefix := strings.Trim(strings.TrimSpace(cfg.SnapshotS3Key), "/")
+	if prefix == "" {
+		return filename
+	}
+	return fmt.Sprintf("%s/%s", prefix, filename)
+}
+
+func snapshotManifestKey(cfg *config.Config) string {
+	prefix := strings.Trim(strings.TrimSpace(cfg.SnapshotS3Key), "/")
+	if prefix == "" {
+		return "snapshot-manifest.json"
+	}
+	return fmt.Sprintf("%s/snapshot-manifest.json", prefix)
+}
+
+type snapshotFileMetadata struct {
+	Date     string
+	Key      string
+	JobCount int
+}
+
+type snapshotManifestEntry struct {
+	Date      string `json:"date"`
+	Key       string `json:"key"`
+	JobCount  int    `json:"jobCount"`
+	UpdatedAt string `json:"updatedAt"`
 }

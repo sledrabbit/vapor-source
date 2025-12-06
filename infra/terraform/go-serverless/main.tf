@@ -57,6 +57,73 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "snapshots" {
   }
 }
 
+resource "aws_cloudfront_origin_access_identity" "snapshots" {
+  comment = "Access identity for snapshot bucket"
+}
+
+resource "aws_cloudfront_distribution" "snapshots" {
+  enabled             = true
+  comment             = "Snapshot JSONL distribution"
+  price_class         = "PriceClass_100"
+  wait_for_deployment = true
+
+  origin {
+    domain_name = aws_s3_bucket.snapshots.bucket_regional_domain_name
+    origin_id   = "snapshots-s3-origin"
+
+    s3_origin_config {
+      origin_access_identity = aws_cloudfront_origin_access_identity.snapshots.cloudfront_access_identity_path
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "snapshots-s3-origin"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+
+    forwarded_values {
+      query_string = false
+
+      cookies {
+        forward = "none"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 3600
+    max_ttl     = 86400
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+}
+
+resource "aws_s3_bucket_policy" "snapshots_cloudfront" {
+  bucket = aws_s3_bucket.snapshots.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_cloudfront_origin_access_identity.snapshots.iam_arn
+        }
+        Action = ["s3:GetObject"]
+        Resource = "${aws_s3_bucket.snapshots.arn}/*"
+      }
+    ]
+  })
+}
+
 resource "aws_dynamodb_table" "jobs" {
   name         = var.dynamodb_table_name
   billing_mode = var.dynamodb_billing_mode
@@ -348,4 +415,9 @@ output "snapshot_lambda_function_arn" {
 output "snapshot_lambda_function_url" {
   description = "Function URL endpoint for triggering the snapshot Lambda."
   value       = aws_lambda_function_url.job_snapshot.function_url
+}
+
+output "snapshot_distribution_domain" {
+  description = "CloudFront domain serving snapshot JSONL files."
+  value       = aws_cloudfront_distribution.snapshots.domain_name
 }
