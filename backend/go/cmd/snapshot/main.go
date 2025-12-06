@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -60,7 +61,9 @@ func handler(ctx context.Context) (Response, error) {
 		dateCursor = dateCursor.AddDate(0, 0, 1)
 	}
 
+	log.Printf("snapshot: fetched %d jobs between %s and %s", len(sortedJobs), startDate, endDate)
 	if len(sortedJobs) == 0 {
+		log.Printf("snapshot: no jobs found for requested date range; exiting")
 		return jsonResponse(http.StatusOK, apiResponse{Message: "Snapshot completed - no jobs for requested date(s)"}), nil
 	}
 
@@ -180,6 +183,7 @@ func writeAndUploadSnapshots(ctx context.Context, groups map[string][]models.Job
 		if err := s3Service.UploadFile(ctx, cfg.SnapshotBucket, objectKey, localPath); err != nil {
 			return fmt.Errorf("upload snapshot %s: %w", date, err)
 		}
+		log.Printf("snapshot: wrote %d jobs to s3://%s/%s", len(groups[date]), cfg.SnapshotBucket, objectKey)
 		_ = os.Remove(localPath)
 	}
 	return nil

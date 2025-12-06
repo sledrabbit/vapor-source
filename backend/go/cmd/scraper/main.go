@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"runtime"
@@ -14,6 +15,10 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambdacontext"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	lambdasvc "github.com/aws/aws-sdk-go-v2/service/lambda"
+	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 
 	"gopher-source/config"
 	"gopher-source/internal/app"
@@ -73,6 +78,23 @@ func handler(ctx context.Context, event Request) (Response, error) {
 	runResult, err := app.Run(ctx, cfg)
 	if err != nil {
 		return errorResponse(http.StatusInternalServerError, fmt.Errorf("run app: %w", err))
+	}
+	log.Printf("snapshot trigger evaluation: jobsAdded=%d cacheEnabled=%t snapshotLambdaSet=%t", runResult.JobsAddedToCache, runResult.JobCacheEnabled, cfg.SnapshotLambda != "")
+
+	switch {
+	case !runResult.JobCacheEnabled:
+		log.Printf("snapshot trigger skipped: job cache disabled")
+	case runResult.JobsAddedToCache <= 0:
+		log.Printf("snapshot trigger skipped: no new jobs added to cache")
+	case cfg.SnapshotLambda == "":
+		log.Printf("snapshot trigger skipped: SNAPSHOT_LAMBDA_FUNCTION_NAME not configured")
+	default:
+		log.Printf("invoking snapshot lambda %s after %d new jobs", cfg.SnapshotLambda, runResult.JobsAddedToCache)
+		if err := triggerSnapshotLambda(ctx, cfg); err != nil {
+			log.Printf("snapshot trigger failed: %v", err)
+		} else {
+			log.Printf("snapshot lambda invoked successfully")
+		}
 	}
 	functionDuration := time.Since(start)
 
@@ -179,6 +201,32 @@ func buildLambdaMetrics(functionDuration, pipelineDuration time.Duration) lambda
 		EstimatedMemoryUsed: round(bytesToMB(memStats.Alloc), 2),
 		PipelineDurationMs:  pipelineDuration.Milliseconds(),
 	}
+}
+
+func triggerSnapshotLambda(ctx context.Context, cfg *config.Config) error {
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.AWSRegion))
+	if err != nil {
+		return fmt.Errorf("load aws config: %w", err)
+	}
+	client := lambdasvc.NewFromConfig(awsCfg)
+
+	payload, err := json.Marshal(map[string]string{
+		"triggeredBy": "scraper",
+		"reason":      "jobs_added_to_cache",
+	})
+	if err != nil {
+		return fmt.Errorf("marshal snapshot payload: %w", err)
+	}
+
+	_, err = client.Invoke(ctx, &lambdasvc.InvokeInput{
+		FunctionName:   aws.String(cfg.SnapshotLambda),
+		InvocationType: lambdatypes.InvocationTypeEvent,
+		Payload:        payload,
+	})
+	if err != nil {
+		return fmt.Errorf("invoke snapshot lambda: %w", err)
+	}
+	return nil
 }
 
 func bytesToMB(bytes uint64) float64 {

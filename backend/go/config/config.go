@@ -32,6 +32,7 @@ type Config struct {
 	JobIDsS3Key       string
 	SnapshotBucket    string
 	SnapshotS3Key     string
+	SnapshotLambda    string
 	SnapshotStartDate string
 	SnapshotEndDate   string
 }
@@ -82,6 +83,7 @@ func Load() (*Config, error) {
 		JobIDsS3Key:       strings.TrimSpace(os.Getenv("JOB_IDS_S3_KEY")),
 		SnapshotBucket:    strings.TrimSpace(os.Getenv("SNAPSHOT_BUCKET")),
 		SnapshotS3Key:     strings.TrimSpace(os.Getenv("SNAPSHOT_S3_KEY")),
+		SnapshotLambda:    strings.TrimSpace(os.Getenv("SNAPSHOT_LAMBDA_FUNCTION_NAME")),
 		SnapshotStartDate: strings.TrimSpace(os.Getenv("SNAPSHOT_START_DATE")),
 		SnapshotEndDate:   strings.TrimSpace(os.Getenv("SNAPSHOT_END_DATE")),
 	}, nil

@@ -95,22 +95,28 @@ func Run(ctx context.Context, cfg *config.Config) (*RunResult, error) {
 
 	if cfg.UseJobIDFile {
 		keySet = scraper.GetProcessedIDs()
-		if err := dynamoService.WriteJobIdsToFile(cfg.Filename, keySet); err != nil {
-			return nil, fmt.Errorf("write job ids: %w", err)
-		}
-		if cfg.UseS3JobIDFile && s3Service != nil {
-			utils.Debug(fmt.Sprintf("Uploading %d job IDs to s3://%s/%s", len(keySet), cfg.JobIDsBucket, cfg.JobIDsS3Key))
-			if err := uploadJobIDCache(ctx, s3Service, cfg.JobIDsBucket, cfg.JobIDsS3Key, cfg.Filename); err != nil {
-				return nil, err
+		if cfg.ApiDryRun == "true" {
+			result.JobCacheFinalSize = keySetInitialSize
+			result.JobsAddedToCache = 0
+			utils.Debug("API_DRY_RUN enabled; skipping job ID cache upload")
+		} else {
+			if err := dynamoService.WriteJobIdsToFile(cfg.Filename, keySet); err != nil {
+				return nil, fmt.Errorf("write job ids: %w", err)
 			}
-			result.JobCacheS3Bucket = cfg.JobIDsBucket
-			result.JobCacheS3Key = cfg.JobIDsS3Key
+			if cfg.UseS3JobIDFile && s3Service != nil {
+				utils.Debug(fmt.Sprintf("Uploading %d job IDs to s3://%s/%s", len(keySet), cfg.JobIDsBucket, cfg.JobIDsS3Key))
+				if err := uploadJobIDCache(ctx, s3Service, cfg.JobIDsBucket, cfg.JobIDsS3Key, cfg.Filename); err != nil {
+					return nil, err
+				}
+				result.JobCacheS3Bucket = cfg.JobIDsBucket
+				result.JobCacheS3Key = cfg.JobIDsS3Key
+			}
+			keySetFinalSize := len(keySet)
+			result.JobCacheFinalSize = keySetFinalSize
+			result.JobsAddedToCache = keySetFinalSize - keySetInitialSize
+			utils.Debug(fmt.Sprintf("💰Jobs added to cache: %d", keySetFinalSize-keySetInitialSize))
+			utils.Debug(fmt.Sprintf("Job ID cache now contains %d entries", keySetFinalSize))
 		}
-		keySetFinalSize := len(keySet)
-		result.JobCacheFinalSize = keySetFinalSize
-		result.JobsAddedToCache = keySetFinalSize - keySetInitialSize
-		utils.Debug(fmt.Sprintf("💰Jobs added to cache: %d", keySetFinalSize-keySetInitialSize))
-		utils.Debug(fmt.Sprintf("Job ID cache now contains %d entries", keySetFinalSize))
 	}
 
 	executionTime := time.Since(startTime)

@@ -193,6 +193,26 @@ resource "aws_lambda_function" "job_scraper" {
   depends_on = [aws_cloudwatch_log_group.job_scraper]
 }
 
+resource "aws_cloudwatch_event_rule" "job_scraper_schedule" {
+  name                = "${var.scraper_lambda_function_name}-schedule"
+  description         = "Schedule for triggering the Go scraper Lambda."
+  schedule_expression = var.scraper_schedule_expression
+}
+
+resource "aws_cloudwatch_event_target" "job_scraper_schedule" {
+  rule      = aws_cloudwatch_event_rule.job_scraper_schedule.name
+  target_id = "job-scraper-lambda"
+  arn       = aws_lambda_function.job_scraper.arn
+}
+
+resource "aws_lambda_permission" "job_scraper_schedule" {
+  statement_id  = "AllowExecutionFromEventBridgeScraper"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.job_scraper.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.job_scraper_schedule.arn
+}
+
 resource "aws_lambda_function_url" "job_scraper" {
   function_name      = aws_lambda_function.job_scraper.arn
   authorization_type = "NONE"

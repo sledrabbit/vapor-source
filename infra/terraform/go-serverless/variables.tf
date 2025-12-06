@@ -28,6 +28,11 @@ variable "snapshot_lambda_function_name" {
   default     = "go-job-snapshot"
 }
 
+variable "scraper_schedule_expression" {
+  description = "EventBridge schedule expression for triggering the scraper Lambda."
+  type        = string
+}
+
 variable "snapshot_lambda_description" {
   description = "Description for the snapshot Lambda function."
   type        = string
@@ -68,7 +73,7 @@ variable "snapshot_environment_variables" {
     DYNAMODB_ENDPOINT   = ""
     SNAPSHOT_BUCKET     = ""
     SNAPSHOT_S3_KEY     = ""
-    API_DRY_RUN         = "true"
+    API_DRY_RUN         = "true" # to bypass api key check in shared config.go
     SNAPSHOT_START_DATE = ""
     SNAPSHOT_END_DATE   = ""
   }
