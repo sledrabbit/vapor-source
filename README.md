@@ -1,93 +1,71 @@
 # Vapor Source: Job Aggregation & Analysis Platform
 
-Vapor Source is a backend cloud project (toy app) designed to scrape, process, analyze, and store software job postings. It leverages Swift for its backend services, OpenAI for intelligent parsing of job listings, and AWS for a scalable cloud infrastructure managed by Terraform. Job postings in my experience cannot be reliably filtered on years of experience required or if they are actually remote, which is what inspired this project.
+Vapor Source is a backend system for scraping, enriching, and exporting software job postings. The current implementation is a cost-minimized Go serverless pipeline; the original Swift + Vapor stack remains in `backend/swift/` as legacy. My main motivation for this project is job boards rarely expose reliable filters for years of experience or true remote eligibility.
 
-The choice of Swift was simply to experience it on the server side and check out the new language features. If I was actually going to use this on AWS beyond seeing that it works, I would use additional lambda functions instead of Vapor to keep costs down and write some tests. Running the project locally with Docker Compose is sufficient for my use case which is why I didn't build out GET routes or a frontend.
+## Core Functionality (Go, current)
 
-## Core Functionality
+* **Web scraping:** Go Lambda crawls `worksourcewa.com`.
+* **AI-powered enrichment:** OpenAI structured outputs normalize modality, domain, degree, skills, and years of experience.
+* **Canonical storage:** Jobs are deduped and stored in DynamoDB (`JobId` PK, `PostedDate` sort key, `PostedDate-Index` GSI).
+* **Snapshot export:** Snapshot Lambda writes per-day JSONL files to S3 and refreshes `snapshot-manifest.json` for consumers (fronted by CloudFront).
+* **Legacy (Swift/Vapor):** Kept for reference; no longer the canonical path.
 
-*   **Web Scraping:** Extracts job listings from `worksourcewa.com` using a Swift scraper:
-    *   A **Swift-based scraper** within an AWS Lambda function (`vapor-source/backend/swift/vapor-client`) using the `Kanna` library for HTML parsing.
-*   **AI-Powered Job Data Enrichment:** The Swift Lambda client utilizes the OpenAI API to parse raw job descriptions, extracting structured information such as:
-    *   Minimum degree and years of experience
-    *   Work modality (Remote, Hybrid, In-Office)
-    *   Job domain (Backend, Full-Stack, AI/ML, etc.)
-    *   Required programming languages and technologies
-    *   Relevance to software engineering roles
-*   **Centralized API & Data Storage:** A **Swift Vapor server** (`vapor-source/backend/swift/vapor-server`) provides a RESTful API (defined with OpenAPI) to:
-    *   Ingest processed job data from the Swift Lambda client.
-    *   Persist job listings, associated languages, and technologies into a PostgreSQL database using Fluent ORM.
-*   **Automated Cloud Infrastructure:** The entire cloud deployment is managed via **Terraform** (`vapor-source/infra/terraform`), provisioning resources on AWS.
+## Architecture Overview (Go serverless)
 
-## Architecture Overview
+```
+EventBridge (cron)
+      ↓
+Scraper Lambda (Go)
+      ↓
+DynamoDB (JobId PK, PostedDate SK; GSI PostedDate-Index)
+      ↓
+Snapshot Lambda (Go)
+      ↓
+S3 (per-day JSONL + snapshot-manifest.json) → CloudFront
+```
 
-1.  **Scraping:**
-    *   The Swift Lambda function (`vapor-client`) scrapes job data.
-2.  **Processing & Enrichment (Swift Lambda):**
-    *   Job descriptions are sent to the OpenAI API for analysis and structuring.
-3.  **Ingestion & Storage (Vapor Server):**
-    *   The Swift Lambda posts the enriched job data to the Vapor API.
-    *   The Vapor server validates and stores the data in an RDS PostgreSQL database.
-4.  **Deployment:**
-    *   The Swift Lambda is packaged and deployed to AWS Lambda.
-    *   The Vapor server is containerized using Docker and deployed to AWS ECS Fargate.
-    *   An Application Load Balancer fronts the ECS service.
-    *   API Gateway exposes the Lambda function.
-    *   Database credentials for the Vapor server are securely managed using AWS SSM Parameter Store.
+* Scraper Lambda handles crawling, OpenAI enrichment, dedupe, and writes to DynamoDB.
+* When new rows land, the scraper invokes the snapshot Lambda to emit per-day JSONL files.
+* CloudFront serves snapshot artifacts without exposing the S3 bucket.
 
 ## Technology Stack
 
-*   **Languages:**
-    *   Swift (Vapor API Server, Lambda Client/Scraper/Parser)
-*   **Backend Frameworks:**
-    *   Vapor 4 (Swift)
-*   **Web Scraping:**
-    *   Kanna (Swift, XML/HTML Parser)
-*   **AI & Data Processing:**
-    *   OpenAI API (GPT models for job description analysis)
-*   **Database:**
-    *   PostgreSQL (with Fluent ORM for Vapor)
-*   **API & Client Generation:**
-    *   OpenAPI (for API design and client/server code generation)
-    *   `swift-openapi-generator`, `swift-openapi-runtime`, `swift-openapi-urlsession`, `swift-openapi-vapor`
-    *   Swagger UI
-*   **Cloud Platform (AWS):**
-    *   **Compute:** Lambda, ECS (Fargate)
-    *   **Database:** RDS for PostgreSQL
-    *   **Networking:** API Gateway, Application Load Balancer (ALB), VPC, Security Groups
-    *   **Containerization:** ECR (Elastic Container Registry), Docker
-    *   **Secrets Management:** SSM Parameter Store
-    *   **Logging:** CloudWatch Logs
-*   **Infrastructure as Code (IaC):**
-    *   Terraform
-*   **Build & Deployment Tools:**
-    *   `Makefile` (for Swift Lambda client packaging)
-    *   AWS SAM (for local Lambda testing - `template.yaml` in `vapor-client`)
-    *   Docker & Docker Compose (for Vapor server development and deployment)
+* **Languages:** Go (current serverless), Swift (legacy)
+* **AI & parsing:** OpenAI structured outputs
+* **Data plane:** DynamoDB, S3, CloudFront
+* **Compute:** AWS Lambda (+ EventBridge triggers)
+* **IaC:** Terraform (`infra/terraform/go-serverless`)
+* **Legacy:** Swift Vapor API + PostgreSQL (retained in `backend/swift/`)
 
 ## Project Structure
 
-*   `vapor-source/backend/swift/vapor-client/`: AWS Lambda function for scraping, AI parsing, and posting data.
-*   `vapor-source/backend/swift/vapor-server/`: Vapor API server and database logic.
-*   `vapor-source/infra/terraform/`: Terraform configuration for AWS infrastructure.
+* `backend/go/`: Go Lambdas (`cmd/scraper`, `cmd/snapshot`, `cmd/local`) and shared libs.
+* `backend/swift/`: Legacy Swift Lambda + Vapor server.
+* `infra/terraform/go-serverless/`: Terraform for the Go stack (Lambdas, DynamoDB, S3, CloudFront, EventBridge).
 
-## Getting Started
+## Getting Started (Go)
 
-1.  **Prerequisites:**
-    *   AWS Account & CLI configured
-    *   Terraform installed
-    *   Docker installed
-    *   Swift toolchain (for local Swift development/builds)
-2.  **Infrastructure Deployment:**
-    *   Navigate to `vapor-source/infra/terraform/`.
-    *   Update `terraform.tfvars` with your specific configurations (e.g., OpenAI API key, ECR image URI after building and pushing the Vapor server image).
-    *   Initialize Terraform: `terraform init`
-    *   Plan and apply: `terraform plan` and `terraform apply`
-3.  **Application Deployment:**
-    *   **Vapor Server (ECS):**
-        *   Build the Docker image for the Vapor server (`vapor-source/backend/swift/vapor-server/Dockerfile`).
-        *   Push the image to the ECR repository created by Terraform.
-        *   Ensure the `vapor_server_image_uri` in `terraform.tfvars` points to this image. Terraform will then deploy it to ECS.
-    *   **Swift Lambda Client:**
-        *   Build the Lambda deployment package using the `Makefile` in `vapor-source/backend/swift/vapor-client/`.
-        *   Ensure the `lambda_zip_path` in `terraform.tfvars` points to the generated zip file. Terraform will deploy the Lambda function.
+1. **Local run:** `cd backend/go && go run ./cmd/local` (requires `.env` with OpenAI key, AWS creds, query, etc.).
+2. **Tests:** `cd backend/go && go test ./...`.
+3. **Package Lambdas:** `cd backend/go && make zip-scraper && make zip-snapshot` → `bin/scraper/lambda.zip`, `bin/snapshot/lambda.zip`.
+4. **Deploy (Terraform):** `cd infra/terraform/go-serverless && terraform init && terraform apply -var-file=terraform.tfvars`.
+
+### Key configuration (Go)
+
+* `OPENAI_API_KEY` (or `API_DRY_RUN=true`), `QUERY`, `MAX_PAGES`, `MAX_CONCURRENCY`.
+* Cache flags: `USE_JOB_ID_FILE`, `USE_S3_JOB_ID_FILE`, `JOB_IDS_BUCKET`, `JOB_IDS_S3_KEY`.
+* Data plane: `DYNAMODB_TABLE_NAME`, `SNAPSHOT_BUCKET`, `SNAPSHOT_S3_KEY`.
+* Snapshot range overrides: `SNAPSHOT_START_DATE`, `SNAPSHOT_END_DATE`.
+* `SNAPSHOT_LAMBDA_FUNCTION_NAME` so the scraper can trigger exports after new writes.
+
+### Snapshot output
+
+Per-day JSONL under `s3://<bucket>/<prefix>/<YYYY-MM-DD>.jsonl` plus `snapshot-manifest.json`. Example record:
+
+```json
+{"jobId":"abc123","title":"Senior Backend Engineer","postedDate":"2025-12-03","modality":"Remote","domain":"Backend","yearsExperience":5,"degree":"Bachelors","skills":["Go","AWS","DynamoDB"],"sourceUrl":"https://worksourcewa.com/..."}
+```
+
+### Limitations / TODO
+
+* No frontend consumer yet; snapshot format is the contract for downstreams.
