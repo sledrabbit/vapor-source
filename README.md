@@ -16,11 +16,9 @@ Vapor Source is a backend system for scraping, enriching, and exporting software
 ```
 EventBridge (cron)
       ↓
-Scraper Lambda (Go)
+Scraper Lambda (Go) ↔ S3 job ID cache (`job-ids.txt`) ↔ in-memory dedupe set
       ↓
 DynamoDB (JobId PK, PostedDate SK; GSI PostedDate-Index)
-      ↕
-S3 job ID cache (`job-ids.txt`) ↔ in-memory dedupe set
       ↓
 Snapshot Lambda (Go)
       ↓
