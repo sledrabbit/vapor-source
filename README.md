@@ -7,6 +7,7 @@ Vapor Source is a backend system for scraping, enriching, and exporting software
 * **Web scraping:** Go Lambda crawls `worksourcewa.com`.
 * **AI-powered enrichment:** OpenAI structured outputs normalize modality, domain, degree, skills, and years of experience.
 * **Canonical storage:** Jobs are deduped and stored in DynamoDB (`JobId` PK, `PostedDate` sort key, `PostedDate-Index` GSI).
+* **Job ID cache:** In-memory dedupe set is seeded from the S3 `job-ids.txt` and persisted back, so runs remain idempotent across invocations.
 * **Snapshot export:** Snapshot Lambda writes per-day JSONL files to S3 and refreshes `snapshot-manifest.json` for consumers (fronted by CloudFront).
 * **Legacy (Swift/Vapor):** Kept for reference; no longer the canonical path.
 
@@ -18,13 +19,15 @@ EventBridge (cron)
 Scraper Lambda (Go)
       ↓
 DynamoDB (JobId PK, PostedDate SK; GSI PostedDate-Index)
+      ↕
+S3 job ID cache (`job-ids.txt`) ↔ in-memory dedupe set
       ↓
 Snapshot Lambda (Go)
       ↓
 S3 (per-day JSONL + snapshot-manifest.json) → CloudFront
 ```
 
-* Scraper Lambda handles crawling, OpenAI enrichment, dedupe, and writes to DynamoDB.
+* Scraper Lambda handles crawling, OpenAI enrichment, S3-synced job ID cache seeding/persisting, dedupe, and writes to DynamoDB.
 * When new rows land, the scraper invokes the snapshot Lambda to emit per-day JSONL files.
 * CloudFront serves snapshot artifacts without exposing the S3 bucket.
 
