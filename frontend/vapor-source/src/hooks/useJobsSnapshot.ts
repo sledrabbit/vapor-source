@@ -3,6 +3,7 @@ import type { Job } from '../types/job';
 
 const SNAPSHOT_BASE_URL = '/snapshots/';
 const SNAPSHOT_MANIFEST_URL = `${SNAPSHOT_BASE_URL}snapshot-manifest.json`;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 type SnapshotManifestEntry = {
   date: string;
@@ -11,8 +12,8 @@ type SnapshotManifestEntry = {
   updatedAt: string;
 };
 
-async function fetchManifestEntries(): Promise<SnapshotManifestEntry[]> {
-  const res = await fetch(SNAPSHOT_MANIFEST_URL);
+async function fetchManifestEntries(signal?: AbortSignal): Promise<SnapshotManifestEntry[]> {
+  const res = await fetch(SNAPSHOT_MANIFEST_URL, { signal });
   if (!res.ok) throw new Error('Manifest load failed');
   const manifest: unknown = await res.json();
 
@@ -23,8 +24,8 @@ async function fetchManifestEntries(): Promise<SnapshotManifestEntry[]> {
   return (manifest as SnapshotManifestEntry[]).sort((a, b) => b.date.localeCompare(a.date));
 }
 
-async function fetchJobs(url: string): Promise<Job[]> {
-  const res = await fetch(url);
+async function fetchJobs(url: string, signal?: AbortSignal): Promise<Job[]> {
+  const res = await fetch(url, { signal });
   if (!res.ok) throw new Error('Snapshot load failed');
   const text = await res.text();
   return text
@@ -33,10 +34,25 @@ async function fetchJobs(url: string): Promise<Job[]> {
     .map((line) => JSON.parse(line) as Job);
 }
 
-export function useJobsSnapshot(targetCount = 10) {
+function parseSnapshotDate(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00Z`);
+}
+
+function getWindowDates(days: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const cutoff = new Date(today);
+  cutoff.setDate(today.getDate() - days);
+  return { today, cutoff };
+}
+
+export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(true);
+  const [availableDays, setAvailableDays] = useState(0);
+  const [fetchedDays, setFetchedDays] = useState(0);
+  const [coveredDays, setCoveredDays] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -44,20 +60,60 @@ export function useJobsSnapshot(targetCount = 10) {
     async function load() {
       try {
         setLoading(true);
-        const manifestEntries = await fetchManifestEntries();
+        setError(undefined);
+        setJobs([]);
+        setAvailableDays(0);
+        setFetchedDays(0);
+        setCoveredDays(0);
+
+        const manifestEntries = await fetchManifestEntries(controller.signal);
         if (manifestEntries.length === 0) {
           throw new Error('No snapshot entries found');
         }
 
-        const aggregated: Job[] = [];
+        setAvailableDays(manifestEntries.length);
+        const { today, cutoff } = getWindowDates(backgroundDays);
 
+        const entriesInWindow: SnapshotManifestEntry[] = [];
         for (const entry of manifestEntries) {
-          const url = `${SNAPSHOT_BASE_URL}${entry.key}`;
-          const snapshotJobs = await fetchJobs(url);
+          const entryDate = parseSnapshotDate(entry.date);
+          if (entryDate < cutoff && entriesInWindow.length > 0) break;
+          entriesInWindow.push(entry);
+        }
+
+        const entriesToFetch = entriesInWindow.length > 0 ? entriesInWindow : manifestEntries.slice(0, backgroundDays);
+
+        let lastError: Error | undefined;
+        const fetchResults = await Promise.allSettled(
+          entriesToFetch.map(async (entry) => {
+            const normalizedKey = entry.key.replace(/^\/?snapshots\//, '');
+            const url = `${SNAPSHOT_BASE_URL}${normalizedKey}`;
+            const snapshotJobs = await fetchJobs(url, controller.signal);
+            return { entry, snapshotJobs };
+          }),
+        );
+
+        const successful = fetchResults.filter(
+          (result): result is PromiseFulfilledResult<{ entry: SnapshotManifestEntry; snapshotJobs: Job[] }> =>
+            result.status === 'fulfilled',
+        );
+        const aggregated: Job[] = [];
+        let maxDaysCovered = 0;
+
+        for (const result of successful) {
+          const { entry, snapshotJobs } = result.value;
           aggregated.push(...snapshotJobs);
-          if (aggregated.length >= targetCount) {
-            break;
-          }
+          const entryDate = parseSnapshotDate(entry.date);
+          const daysCovered = Math.max(0, Math.round((today.getTime() - entryDate.getTime()) / MS_PER_DAY));
+          maxDaysCovered = Math.max(maxDaysCovered, daysCovered);
+        }
+
+        const rejected = fetchResults.filter(
+          (result): result is PromiseRejectedResult => result.status === 'rejected',
+        );
+        if (rejected.length > 0) {
+          const reason = rejected[rejected.length - 1].reason;
+          lastError = reason instanceof Error ? reason : new Error(String(reason));
         }
 
         aggregated.sort((a, b) => {
@@ -66,20 +122,41 @@ export function useJobsSnapshot(targetCount = 10) {
           return (b.postedTime ?? '').localeCompare(a.postedTime ?? '');
         });
 
-        if (!controller.signal.aborted) setJobs(aggregated);
+        if (!controller.signal.aborted) {
+          setJobs(aggregated);
+          setFetchedDays(successful.length);
+          setCoveredDays(maxDaysCovered);
+          if (aggregated.length === 0 && lastError) {
+            setError(lastError.message);
+          }
+        }
       } catch (err) {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
           setError(err instanceof Error ? err.message : String(err));
+        }
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
 
     load();
     return () => controller.abort();
-  }, []);
+  }, [backgroundDays, targetCount]);
 
   const latest = useMemo(() => jobs.slice(0, targetCount), [jobs, targetCount]);
 
-  return { jobs, latest, loading, error };
+  return {
+    jobs,
+    latest,
+    loading,
+    loadingLatest: loading,
+    loadingAll: loading,
+    error,
+    availableDays,
+    fetchedDays,
+    backgroundDays,
+    coveredDays,
+  };
 }
