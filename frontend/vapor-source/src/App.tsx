@@ -1,22 +1,41 @@
-import './App.css'
+import { JobsTable } from './components/JobsTable';
+import { useJobsSnapshot } from './hooks/useJobsSnapshot';
+
+const DEFAULT_COUNT = 10;
 
 function App() {
+  const { latest: latestJobs, loading, error } = useJobsSnapshot(DEFAULT_COUNT);
+
   return (
-    <main className="app">
-      <section className="panel hero">
-        <p className="eyebrow">Vapor Source</p>
-        <h1>Graphs</h1>
-        <p className="lead">
-          ...
+    <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-white px-4 py-10 text-slate-900 sm:px-6 lg:px-8">
+      <section className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-100">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Vapor Source</p>
+        <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">SWE Job Analytics</h1>
+        <p className="mt-3 max-w-3xl text-base text-slate-600">
+          Vapor Source ingests WorkSource postings and intelligently parses descriptions to determine
+          the minimum years of experience, domain, modality, and technology used for the role.
         </p>
       </section>
 
-      <section className="panel placeholder">
-        <h2>Jobs Table</h2>
-        <p>...</p>
+      <section className="mx-auto mt-6 w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100 sm:p-8">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-xl font-semibold text-slate-900">Latest Jobs ({DEFAULT_COUNT})</h2>
+          <p className="text-sm text-slate-500">Newest entries pulled across snapshot files, sorted by posted date.</p>
+        </div>
+
+        {loading && (
+          <p className="mt-6 rounded-lg bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">Loading snapshot…</p>
+        )}
+        {error && !loading && (
+          <p className="mt-6 rounded-lg bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+            Failed to load snapshot: <span className="font-normal text-rose-500">{error}</span>
+          </p>
+        )}
+
+        {!loading && !error && <JobsTable jobs={latestJobs} />}
       </section>
     </main>
-  )
+  );
 }
 
-export default App
+export default App;
