@@ -49,7 +49,8 @@ function getWindowDates(days: number) {
 export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState<string>();
-  const [loading, setLoading] = useState(true);
+  const [loadingLatest, setLoadingLatest] = useState(true);
+  const [loadingAll, setLoadingAll] = useState(true);
   const [availableDays, setAvailableDays] = useState(0);
   const [fetchedDays, setFetchedDays] = useState(0);
   const [coveredDays, setCoveredDays] = useState(0);
@@ -59,7 +60,8 @@ export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
 
     async function load() {
       try {
-        setLoading(true);
+        setLoadingLatest(true);
+        setLoadingAll(true);
         setError(undefined);
         setJobs([]);
         setAvailableDays(0);
@@ -83,37 +85,82 @@ export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
 
         const entriesToFetch = entriesInWindow.length > 0 ? entriesInWindow : manifestEntries.slice(0, backgroundDays);
 
-        let lastError: Error | undefined;
-        const fetchResults = await Promise.allSettled(
-          entriesToFetch.map(async (entry) => {
-            const normalizedKey = entry.key.replace(/^\/?snapshots\//, '');
-            const url = `${SNAPSHOT_BASE_URL}${normalizedKey}`;
-            const snapshotJobs = await fetchJobs(url, controller.signal);
-            return { entry, snapshotJobs };
-          }),
-        );
-
-        const successful = fetchResults.filter(
-          (result): result is PromiseFulfilledResult<{ entry: SnapshotManifestEntry; snapshotJobs: Job[] }> =>
-            result.status === 'fulfilled',
-        );
         const aggregated: Job[] = [];
         let maxDaysCovered = 0;
+        let successfulDays = 0;
+        let lastError: Error | undefined;
 
-        for (const result of successful) {
-          const { entry, snapshotJobs } = result.value;
-          aggregated.push(...snapshotJobs);
-          const entryDate = parseSnapshotDate(entry.date);
-          const daysCovered = Math.max(0, Math.round((today.getTime() - entryDate.getTime()) / MS_PER_DAY));
-          maxDaysCovered = Math.max(maxDaysCovered, daysCovered);
+        const tableEntries: SnapshotManifestEntry[] = [];
+        let accumulatedJobs = 0;
+        for (const entry of entriesToFetch) {
+          if (accumulatedJobs >= targetCount) break;
+          tableEntries.push(entry);
+          accumulatedJobs += entry.jobCount ?? 0;
+        }
+        const remainingEntries = entriesToFetch.slice(tableEntries.length);
+
+        const fetchEntries = (entries: SnapshotManifestEntry[]) =>
+          Promise.allSettled(
+            entries.map(async (entry) => {
+              const normalizedKey = entry.key.replace(/^\/?snapshots\//, '');
+              const url = `${SNAPSHOT_BASE_URL}${normalizedKey}`;
+              const snapshotJobs = await fetchJobs(url, controller.signal);
+              return { entry, snapshotJobs };
+            }),
+          );
+
+        const processResults = (
+          results: PromiseSettledResult<{ entry: SnapshotManifestEntry; snapshotJobs: Job[] }>[],
+        ) => {
+          const fulfilled = results.filter(
+            (result): result is PromiseFulfilledResult<{ entry: SnapshotManifestEntry; snapshotJobs: Job[] }> =>
+              result.status === 'fulfilled',
+          );
+          const rejected = results.filter(
+            (result): result is PromiseRejectedResult => result.status === 'rejected',
+          );
+
+          if (rejected.length > 0) {
+            const reason = rejected[rejected.length - 1].reason;
+            lastError = reason instanceof Error ? reason : new Error(String(reason));
+          }
+
+          for (const result of fulfilled) {
+            const { entry, snapshotJobs } = result.value;
+            aggregated.push(...snapshotJobs);
+            successfulDays += 1;
+            const entryDate = parseSnapshotDate(entry.date);
+            const daysCovered = Math.max(0, Math.round((today.getTime() - entryDate.getTime()) / MS_PER_DAY));
+            maxDaysCovered = Math.max(maxDaysCovered, daysCovered);
+          }
+        };
+
+        if (tableEntries.length > 0) {
+          const tableResults = await fetchEntries(tableEntries);
+          processResults(tableResults);
+
+          aggregated.sort((a, b) => {
+            const dateDiff = b.postedDate.localeCompare(a.postedDate);
+            if (dateDiff !== 0) return dateDiff;
+            return (b.postedTime ?? '').localeCompare(a.postedTime ?? '');
+          });
+
+          if (!controller.signal.aborted) {
+            setJobs([...aggregated]);
+            setFetchedDays(successfulDays);
+            setCoveredDays(maxDaysCovered);
+            setLoadingLatest(false);
+            if (aggregated.length === 0 && lastError) {
+              setError(lastError.message);
+            }
+          }
+        } else {
+          setLoadingLatest(false);
         }
 
-        const rejected = fetchResults.filter(
-          (result): result is PromiseRejectedResult => result.status === 'rejected',
-        );
-        if (rejected.length > 0) {
-          const reason = rejected[rejected.length - 1].reason;
-          lastError = reason instanceof Error ? reason : new Error(String(reason));
+        if (remainingEntries.length > 0) {
+          const backgroundResults = await fetchEntries(remainingEntries);
+          processResults(backgroundResults);
         }
 
         aggregated.sort((a, b) => {
@@ -123,8 +170,8 @@ export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
         });
 
         if (!controller.signal.aborted) {
-          setJobs(aggregated);
-          setFetchedDays(successful.length);
+          setJobs([...aggregated]);
+          setFetchedDays(successfulDays);
           setCoveredDays(maxDaysCovered);
           if (aggregated.length === 0 && lastError) {
             setError(lastError.message);
@@ -136,7 +183,8 @@ export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
         }
       } finally {
         if (!controller.signal.aborted) {
-          setLoading(false);
+          setLoadingLatest(false);
+          setLoadingAll(false);
         }
       }
     }
@@ -150,9 +198,9 @@ export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
   return {
     jobs,
     latest,
-    loading,
-    loadingLatest: loading,
-    loadingAll: loading,
+    loading: loadingLatest,
+    loadingLatest,
+    loadingAll,
     error,
     availableDays,
     fetchedDays,

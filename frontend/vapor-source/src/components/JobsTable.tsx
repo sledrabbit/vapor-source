@@ -1,4 +1,15 @@
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable, type ColumnDef } from '@tanstack/react-table';
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type PaginationState,
+  type SortingState,
+} from '@tanstack/react-table';
+import { useEffect, useState } from 'react';
 import type { Job } from '../types/job';
 
 const columnHelper = createColumnHelper<Job>();
@@ -123,13 +134,27 @@ const columns: ColumnDef<Job, any>[] = [
 
 type JobsTableProps = {
   jobs: Job[];
+  pageSize?: number;
 };
 
-export function JobsTable({ jobs }: JobsTableProps) {
+export function JobsTable({ jobs, pageSize = 10 }: JobsTableProps) {
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'postedDate', desc: true }]);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize });
+
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, pageSize }));
+  }, [pageSize]);
+
   const table = useReactTable({
     data: jobs,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    onPaginationChange: setPagination,
+    state: { sorting, pagination },
+    autoResetPageIndex: false,
   });
 
   return (
@@ -144,7 +169,19 @@ export function JobsTable({ jobs }: JobsTableProps) {
                     key={header.id}
                     className="border-b border-slate-200 bg-slate-50 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
                   >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {header.isPlaceholder ? null : (
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-left"
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {{
+                          asc: '↑',
+                          desc: '↓',
+                        }[header.column.getIsSorted() as 'asc' | 'desc'] ?? null}
+                      </button>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -162,6 +199,29 @@ export function JobsTable({ jobs }: JobsTableProps) {
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
+        <span>
+          Page {table.getState().pagination.pageIndex + 1} of {Math.max(table.getPageCount(), 1)}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+            className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium text-slate-600 transition enabled:hover:border-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+            className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium text-slate-600 transition enabled:hover:border-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );
