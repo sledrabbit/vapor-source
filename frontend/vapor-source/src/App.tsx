@@ -1,8 +1,12 @@
+import { Suspense, lazy } from 'react';
 import { JobsTable } from './components/JobsTable';
-import { JobsInsights } from './components/JobsInsights';
 import { useJobsSnapshot } from './hooks/useJobsSnapshot';
 
 const DEFAULT_PAGE_SIZE = 15;
+
+const JobsInsights = lazy(() =>
+  import('./components/JobsInsights').then((module) => ({ default: module.JobsInsights })),
+);
 
 function App() {
   const { jobs, loading, error } = useJobsSnapshot(DEFAULT_PAGE_SIZE);
@@ -24,7 +28,15 @@ function App() {
             <h2 className="text-xl font-semibold text-slate-900">Snapshot insights</h2>
           </div>
           <div className="mt-5">
-            <JobsInsights jobs={jobs} />
+            <Suspense
+              fallback={
+                <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
+                  Loading charts…
+                </p>
+              }
+            >
+              <JobsInsights jobs={jobs} />
+            </Suspense>
           </div>
         </section>
       )}

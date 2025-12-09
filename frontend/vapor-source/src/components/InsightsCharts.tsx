@@ -1,6 +1,15 @@
-import Plot from 'react-plotly.js';
-import type { Data, Layout } from 'plotly.js';
 import { useMemo } from 'react';
+import type { Data, Layout } from 'plotly.js';
+import Plotly from 'plotly.js/lib/core';
+import bar from 'plotly.js/lib/bar';
+import box from 'plotly.js/lib/box';
+import heatmap from 'plotly.js/lib/heatmap';
+import scatter from 'plotly.js/lib/scatter';
+import createPlotlyComponent from 'react-plotly.js/factory';
+
+Plotly.register([box, bar, scatter, heatmap]);
+
+const Plot = createPlotlyComponent(Plotly);
 
 const chartPalette = ['#f2e9e1', '#286983', '#56949f', '#797593', '#9893a5', '#907aa9', '#b4637a', '#d7827e', '#ea9d34'] as const;
 const beeswarmPalette = chartPalette.filter((color) => color !== '#f2e9e1');
