@@ -127,7 +127,7 @@ export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
 
           for (const result of fulfilled) {
             const { entry, snapshotJobs } = result.value;
-            aggregated.push(...snapshotJobs);
+            aggregated.push(...snapshotJobs.filter((job) => job.IsSoftwareEngineerRelated));
             successfulDays += 1;
             const entryDate = parseSnapshotDate(entry.date);
             const daysCovered = Math.max(0, Math.round((today.getTime() - entryDate.getTime()) / MS_PER_DAY));
