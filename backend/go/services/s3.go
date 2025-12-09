@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -40,11 +41,15 @@ func (s *s3ClientImpl) UploadFile(ctx context.Context, bucketName string, object
 		log.Printf("Couldn't open file %v to upload. Here's why: %v\n", fileName, err)
 	} else {
 		defer file.Close()
-		_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
+		input := &s3.PutObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(objectKey),
 			Body:   file,
-		})
+		}
+		if ct := contentTypeForKey(objectKey); ct != "" {
+			input.ContentType = aws.String(ct)
+		}
+		_, err = s.client.PutObject(ctx, input)
 		if err != nil {
 			var apiErr smithy.APIError
 			if errors.As(err, &apiErr) && apiErr.ErrorCode() == "EntityTooLarge" {
@@ -121,4 +126,19 @@ func (s *s3ClientImpl) WriteJobsToJSONLFile(filename string, jobs []models.Job) 
 		return fmt.Errorf("flush writer: %w", err)
 	}
 	return nil
+}
+
+func contentTypeForKey(key string) string {
+	lower := strings.ToLower(strings.TrimSpace(key))
+	switch {
+	case strings.HasSuffix(lower, ".json"),
+		strings.HasSuffix(lower, ".jsonl"),
+		strings.HasSuffix(lower, ".json.gz"),
+		strings.HasSuffix(lower, ".jsonl.gz"):
+		return "application/json"
+	case strings.HasSuffix(lower, ".txt"):
+		return "text/plain"
+	default:
+		return ""
+	}
 }

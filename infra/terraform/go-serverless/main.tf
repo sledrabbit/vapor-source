@@ -81,6 +81,7 @@ resource "aws_cloudfront_distribution" "snapshots" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
+    compress               = true
 
     forwarded_values {
       query_string = false
@@ -222,6 +223,13 @@ resource "aws_iam_role_policy" "job_scraper" {
           "s3:ListBucket"
         ]
         Resource = aws_s3_bucket.snapshots.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = aws_lambda_function.job_snapshot.arn
       }
     ]
   })
@@ -253,6 +261,7 @@ resource "aws_lambda_function" "job_scraper" {
         JOB_IDS_BUCKET      = aws_s3_bucket.job_id_cache.bucket
         JOB_IDS_S3_KEY      = var.job_ids_s3_key
         SNAPSHOT_BUCKET     = aws_s3_bucket.snapshots.bucket
+        SNAPSHOT_LAMBDA_FUNCTION_NAME = aws_lambda_function.job_snapshot.function_name
       }
     )
   }

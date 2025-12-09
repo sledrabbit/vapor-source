@@ -176,3 +176,26 @@ func TestWriteJobsToJSONLFile_CreateError(t *testing.T) {
 		t.Fatalf("expected error for unwritable path, got nil")
 	}
 }
+
+func TestContentTypeForKey(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		key      string
+		expected string
+	}{
+		{"snapshot.json", "application/json"},
+		{"snapshot.JSONL", "application/json"},
+		{"snapshot.jsonl.gz", "application/json"},
+		{"notes.txt", "text/plain"},
+		{"binary.bin", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.key, func(t *testing.T) {
+			if got := contentTypeForKey(tt.key); got != tt.expected {
+				t.Fatalf("contentTypeForKey(%q) = %q, want %q", tt.key, got, tt.expected)
+			}
+		})
+	}
+}
