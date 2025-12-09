@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { JobsTable } from './components/JobsTable';
 import { useJobsSnapshot } from './hooks/useJobsSnapshot';
+import { InsightsSkeleton } from './components/InsightsSkeleton';
 
 const DEFAULT_PAGE_SIZE = 15;
 
@@ -29,11 +30,7 @@ function App() {
           </div>
           <div className="mt-5">
             <Suspense
-              fallback={
-                <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
-                  Loading charts…
-                </p>
-              }
+              fallback={<InsightsSkeleton />}
             >
               <JobsInsights jobs={jobs} />
             </Suspense>
