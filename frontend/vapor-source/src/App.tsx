@@ -1,4 +1,5 @@
 import { JobsTable } from './components/JobsTable';
+import { JobsInsights } from './components/JobsInsights';
 import { useJobsSnapshot } from './hooks/useJobsSnapshot';
 
 const DEFAULT_PAGE_SIZE = 15;
@@ -7,8 +8,8 @@ function App() {
   const { jobs, loading, error } = useJobsSnapshot(DEFAULT_PAGE_SIZE);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-white px-4 py-10 text-slate-900 sm:px-6 lg:px-8">
-      <section className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-100">
+    <main className="min-h-screen bg-gradient-to-b from-[rgba(255,255,252,0.25)] via-white to-white px-4 py-10 text-slate-900 sm:px-6 lg:px-8">
+      <section className="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_30px_80px_rgba(248,235,222,0.32)]">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Vapor Source</p>
         <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">SWE Job Analytics</h1>
         <p className="mt-3 max-w-3xl text-base text-slate-600">
@@ -17,10 +18,19 @@ function App() {
         </p>
       </section>
 
-      <section className="mx-auto mt-6 w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100 sm:p-8">
+      {!loading && !error && jobs.length > 0 && (
+        <section className="mx-auto mt-6 w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_30px_80px_rgba(248,235,222,0.32)] sm:p-8">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-xl font-semibold text-slate-900">Snapshot insights</h2>
+          </div>
+          <div className="mt-5">
+            <JobsInsights jobs={jobs} />
+          </div>
+        </section>
+      )}
+      <section className="mx-auto mt-6 w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_30px_80px_rgba(248,235,222,0.32)] sm:p-8">
         <div className="flex flex-col gap-1">
           <h2 className="text-xl font-semibold text-slate-900">Job Listings</h2>
-          <p className="text-sm text-slate-500">Newest entries pulled across snapshot files, sorted by posted date.</p>
         </div>
 
         {loading && (
