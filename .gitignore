@@ -1,6 +1,5 @@
 .DS_Store
 .vscode*
-*.html
 .env
 .github
 .terraform
