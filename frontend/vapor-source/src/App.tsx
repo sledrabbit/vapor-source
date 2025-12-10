@@ -3,7 +3,7 @@ import { JobsTable } from './components/JobsTable';
 import { useJobsSnapshot } from './hooks/useJobsSnapshot';
 import { InsightsSkeleton } from './components/InsightsSkeleton';
 
-const DEFAULT_PAGE_SIZE = 15;
+const DEFAULT_PAGE_SIZE = 10;
 
 const JobsInsights = lazy(() =>
   import('./components/JobsInsights').then((module) => ({ default: module.JobsInsights })),

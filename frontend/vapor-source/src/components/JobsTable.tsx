@@ -228,7 +228,7 @@ type JobsTableProps = {
   pageSize?: number;
 };
 
-const pageSizeOptions = [25, 50, 100];
+const pageSizeOptions = [10, 25, 50, 100];
 
 export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'postedDate', desc: true }]);

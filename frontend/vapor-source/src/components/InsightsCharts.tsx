@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Data, Layout } from 'plotly.js';
 import Plotly from 'plotly.js/lib/core';
 import bar from 'plotly.js/lib/bar';
@@ -74,6 +74,34 @@ const baseVerticalBarLayout: Partial<Layout> = {
   yaxis: { gridcolor: '#e2e8f0', rangemode: 'tozero' },
 };
 
+const MOBILE_MAX_WIDTH = 640;
+
+function useCompactScreen(maxWidth = MOBILE_MAX_WIDTH) {
+  const [isCompact, setIsCompact] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return false;
+    }
+    return window.matchMedia(`(max-width: ${maxWidth}px)`).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return;
+    }
+    const query = window.matchMedia(`(max-width: ${maxWidth}px)`);
+    const handleChange = (event: MediaQueryListEvent) => setIsCompact(event.matches);
+    setIsCompact(query.matches);
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', handleChange);
+      return () => query.removeEventListener('change', handleChange);
+    }
+    query.addListener(handleChange);
+    return () => query.removeListener(handleChange);
+  }, [maxWidth]);
+
+  return isCompact;
+}
+
 export type BoxStat = {
   label: string;
   values: number[];
@@ -124,6 +152,7 @@ export function MinYoeBoxPlot({
   hoverLabelColor = hoverLabelFontColor,
   hoverLabelBg = hoverLabelBgColor,
 }: MinYoeBoxPlotProps) {
+  const isCompact = useCompactScreen();
   const plotData = useMemo<Data[]>(
     () =>
       stats.map((entry) => ({
@@ -141,8 +170,10 @@ export function MinYoeBoxPlot({
   const layout = useMemo<Partial<Layout>>(
     () => ({
       ...baseBoxLayout,
+      margin: isCompact ? { l: 40, r: 12, t: 32, b: 60 } : baseBoxLayout.margin,
+      height: isCompact ? 280 : baseBoxLayout.height,
     }),
-    [],
+    [isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 360;
@@ -172,6 +203,7 @@ export function DomainPopularityChart({
   totalJobs,
   height,
 }: DomainPopularityChartProps) {
+  const isCompact = useCompactScreen();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -188,26 +220,29 @@ export function DomainPopularityChart({
   );
 
   const layout = useMemo<Partial<Layout>>(
-    () => ({
-      ...baseHorizontalBarLayout,
-      xaxis: {
-        ...(baseHorizontalBarLayout.xaxis ?? {}),
-        title: { text: 'Postings' },
-      },
-      height:
-        height ??
-        Math.max(
-          720,
-          Math.min(900, 48 * domains.length + 260),
-        ),
-    }),
-    [domains.length, height],
+    () => {
+      const autoHeight = Math.max(720, Math.min(900, 48 * domains.length + 260));
+      const targetHeight = height ?? autoHeight;
+      const finalHeight = isCompact ? Math.max(360, Math.min(600, targetHeight)) : targetHeight;
+      return {
+        ...baseHorizontalBarLayout,
+        margin: isCompact ? { l: 90, r: 12, t: 40, b: 32 } : baseHorizontalBarLayout.margin,
+        xaxis: {
+          ...(baseHorizontalBarLayout.xaxis ?? {}),
+          title: { text: 'Postings' },
+        },
+        height: finalHeight,
+      };
+    },
+    [domains.length, height, isCompact],
   );
+
+  const chartHeight = (layout.height as number | undefined) ?? 360;
 
   return (
     <div
       className="flex h-full flex-col rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
-      style={height ? { minHeight: height } : undefined}
+      style={{ minHeight: chartHeight }}
     >
       <div className="mb-3 flex items-center justify-between">
         <div>
@@ -231,6 +266,7 @@ type ModalityPopularityChartProps = {
 };
 
 export function ModalityPopularityChart({ modalities }: ModalityPopularityChartProps) {
+  const isCompact = useCompactScreen();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -248,9 +284,14 @@ export function ModalityPopularityChart({ modalities }: ModalityPopularityChartP
   const layout = useMemo<Partial<Layout>>(
     () => ({
       ...baseVerticalBarLayout,
-      height: 320,
+      margin: isCompact ? { l: 40, r: 12, t: 40, b: 60 } : baseVerticalBarLayout.margin,
+      xaxis: {
+        ...(baseVerticalBarLayout.xaxis ?? {}),
+        tickangle: isCompact ? -15 : baseVerticalBarLayout.xaxis?.tickangle,
+      },
+      height: isCompact ? 260 : 320,
     }),
-    [],
+    [isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 320;
@@ -274,6 +315,7 @@ type DegreeRequirementsChartProps = {
 };
 
 export function DegreeRequirementsChart({ degrees }: DegreeRequirementsChartProps) {
+  const isCompact = useCompactScreen();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -291,9 +333,14 @@ export function DegreeRequirementsChart({ degrees }: DegreeRequirementsChartProp
   const layout = useMemo<Partial<Layout>>(
     () => ({
       ...baseVerticalBarLayout,
-      height: 320,
+      margin: isCompact ? { l: 40, r: 12, t: 40, b: 60 } : baseVerticalBarLayout.margin,
+      xaxis: {
+        ...(baseVerticalBarLayout.xaxis ?? {}),
+        tickangle: isCompact ? -15 : baseVerticalBarLayout.xaxis?.tickangle,
+      },
+      height: isCompact ? 260 : 320,
     }),
-    [],
+    [isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 320;
@@ -318,6 +365,7 @@ type YoeDistributionChartProps = {
 };
 
 export function YoeDistributionChart({ buckets, height }: YoeDistributionChartProps) {
+  const isCompact = useCompactScreen();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -333,13 +381,25 @@ export function YoeDistributionChart({ buckets, height }: YoeDistributionChartPr
   );
 
   const layout = useMemo<Partial<Layout>>(
-    () => ({
-      ...baseVerticalBarLayout,
-      height: height ?? 320,
-      xaxis: { ...(baseVerticalBarLayout.xaxis ?? {}), title: { text: 'Min years of experience' } },
-      yaxis: { ...(baseVerticalBarLayout.yaxis ?? {}), title: { text: 'Postings' } },
-    }),
-    [height],
+    () => {
+      const desiredHeight = height ?? 320;
+      const finalHeight = isCompact ? Math.max(280, Math.min(360, desiredHeight)) : desiredHeight;
+      return {
+        ...baseVerticalBarLayout,
+        margin: isCompact ? { l: 50, r: 12, t: 40, b: 70 } : baseVerticalBarLayout.margin,
+        height: finalHeight,
+        xaxis: {
+          ...(baseVerticalBarLayout.xaxis ?? {}),
+          title: { text: 'Min years of experience' },
+          tickangle: isCompact ? -10 : baseVerticalBarLayout.xaxis?.tickangle,
+        },
+        yaxis: {
+          ...(baseVerticalBarLayout.yaxis ?? {}),
+          title: { text: 'Postings' },
+        },
+      };
+    },
+    [height, isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 320;
@@ -359,6 +419,7 @@ export function YoeDistributionChart({ buckets, height }: YoeDistributionChartPr
 }
 
 export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
+  const isCompact = useCompactScreen();
   const { positions, labels, colorByLabel } = useMemo(() => {
     const uniqueLabels = Array.from(new Set(samples.map((sample) => sample.label)));
     const labelIndex = new Map(uniqueLabels.map((label, idx) => [label, idx]));
@@ -420,17 +481,20 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
   const layout = useMemo<Partial<Layout>>(
     () => ({
       ...baseBoxLayout,
+      margin: isCompact ? { l: 40, r: 12, t: 32, b: 70 } : baseBoxLayout.margin,
+      height: isCompact ? 320 : baseBoxLayout.height,
       xaxis: {
         tickmode: 'array',
         tickvals: labels.map((_, idx) => idx),
         ticktext: labels,
-        tickangle: -35,
+        tickangle: isCompact ? -45 : -35,
+        showticklabels: true,
         range: [-0.7, labels.length - 0.3],
         showgrid: false,
         zeroline: false,
       },
     }),
-    [labels],
+    [labels, isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 360;
@@ -455,6 +519,7 @@ type DomainYoeHeatmapProps = {
 };
 
 export function DomainYoeHeatmap({ data }: DomainYoeHeatmapProps) {
+  const isCompact = useCompactScreen();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -472,16 +537,27 @@ export function DomainYoeHeatmap({ data }: DomainYoeHeatmapProps) {
   );
 
   const layout = useMemo<Partial<Layout>>(
-    () => ({
-      margin: { l: 160, r: 20, t: 40, b: 60 },
-      paper_bgcolor: 'rgba(0,0,0,0)',
-      plot_bgcolor: 'rgba(0,0,0,0)',
-      font: baseFont,
-      xaxis: { automargin: true },
-      yaxis: { automargin: true },
-      height: Math.max(320, 28 * data.domains.length + 120),
-    }),
-    [data.domains.length],
+    () => {
+      const autoHeight = Math.max(320, 28 * data.domains.length + 120);
+      const finalHeight = isCompact ? Math.min(Math.max(320, autoHeight), 520) : autoHeight;
+      return {
+        margin: isCompact ? { l: 56, r: 16, t: 32, b: 48 } : { l: 140, r: 20, t: 40, b: 60 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: baseFont,
+        xaxis: {
+          automargin: true,
+          title: { text: 'Min years of experience' },
+          titlefont: { size: isCompact ? 12 : 14 },
+        },
+        yaxis: {
+          automargin: !isCompact,
+          tickfont: { size: isCompact ? 10 : 12 },
+        },
+        height: finalHeight,
+      };
+    },
+    [data.domains.length, isCompact],
   );
 
   return (
@@ -504,6 +580,7 @@ type DomainPopularityTrendChartProps = {
 };
 
 export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTrendChartProps) {
+  const isCompact = useCompactScreen();
   const MAX_TICKS = 10;
   const tickStep = Math.ceil(dates.length / MAX_TICKS);
   const tickDates = dates.filter((_, idx) => idx % tickStep === 0);
@@ -518,6 +595,18 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
     });
     return map;
   }, [series]);
+
+  const legendEntries = useMemo(() => {
+    const seen = new Set<string>();
+    const entries: { domain: string; color: string }[] = [];
+    series.forEach((entry) => {
+      if (!seen.has(entry.domain)) {
+        seen.add(entry.domain);
+        entries.push({ domain: entry.domain, color: colorMap.get(entry.domain) ?? chartPalette[0] });
+      }
+    });
+    return entries;
+  }, [series, colorMap]);
 
   const plotData = useMemo<Data[]>(
     () =>
@@ -543,21 +632,23 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
 
   const layout = useMemo<Partial<Layout>>(
     () => ({
-      margin: { l: 60, r: 20, t: 40, b: 60 },
+      margin: isCompact ? { l: 45, r: 12, t: 32, b: 60 } : { l: 60, r: 20, t: 40, b: 70 },
       paper_bgcolor: 'rgba(0,0,0,0)',
       plot_bgcolor: 'rgba(0,0,0,0)',
       font: baseFont,
       xaxis: {
         type: 'category',
-        tickvals: tickDates,
-        tickDates: tickDates.map((d) => d.slice(5)),
-        tickangle: -30,
+        tickvals: isCompact ? [] : tickDates,
+        ticktext: isCompact ? undefined : tickDates.map((d) => d.slice(5)),
+        tickangle: isCompact ? -15 : -30,
+        showticklabels: !isCompact,
+        ticks: isCompact ? '' : undefined,
       },
       yaxis: { title: { text: 'Postings per day' }, rangemode: 'tozero' },
-      legend: { orientation: 'h', yanchor: 'bottom', y: 1.02, x: 0, traceorder: 'normal' },
-      height: 360,
+      showlegend: false,
+      height: isCompact ? 300 : 360,
     }),
-    [dates],
+    [isCompact, tickDates],
   );
 
   return (
@@ -566,7 +657,23 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
         <h3 className="text-sm font-semibold text-slate-900">Domain Popularity Over Time</h3>
       </div>
       {series.length > 0 ? (
-        <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${layout.height as number}px` }} />
+        <>
+          <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${layout.height as number}px` }} />
+          {legendEntries.length > 0 && (
+            <div className="mt-3 overflow-x-auto pb-1">
+              <div className="flex w-full min-w-full justify-center gap-4 text-xs font-semibold text-slate-600">
+                <div className="flex min-w-max items-center gap-4">
+                  {legendEntries.map((entry) => (
+                    <span key={entry.domain} className="inline-flex items-center gap-2 whitespace-nowrap">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} aria-hidden="true" />
+                      {entry.domain}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <p className="text-sm text-slate-500">Not enough daily data yet.</p>
       )}
