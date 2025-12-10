@@ -228,7 +228,9 @@ type JobsTableProps = {
   pageSize?: number;
 };
 
-export function JobsTable({ jobs, pageSize = 10 }: JobsTableProps) {
+const pageSizeOptions = [25, 50, 100];
+
+export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'postedDate', desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize });
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -553,23 +555,39 @@ export function JobsTable({ jobs, pageSize = 10 }: JobsTableProps) {
             <span>
               Page {table.getState().pagination.pageIndex + 1} of {Math.max(table.getPageCount(), 1)}
             </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium text-slate-600 transition enabled:hover:border-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium text-slate-600 transition enabled:hover:border-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
-              >
-                Next
-              </button>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+                Rows per page
+                <select
+                  value={table.getState().pagination.pageSize}
+                  onChange={(event) => table.setPageSize(Number(event.target.value))}
+                  className="rounded-md border border-slate-200 px-2 py-1 text-sm font-medium text-slate-600 transition focus:border-[#56949f] focus:outline-none focus:ring-1 focus:ring-[#56949f]/40"
+                >
+                  {pageSizeOptions.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                  className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium text-slate-600 transition enabled:hover:border-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                  className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium text-slate-600 transition enabled:hover:border-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </div>
