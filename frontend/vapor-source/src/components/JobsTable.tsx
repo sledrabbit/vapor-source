@@ -40,6 +40,14 @@ const lineClampStyle = (lines: number) => ({
   overflow: 'hidden',
 });
 
+const ensureNonNegativeNumericString = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number(trimmed);
+  if (Number.isNaN(parsed)) return undefined;
+  return String(Math.max(0, parsed));
+};
+
 type ClampedTextProps = {
   text?: string;
   lines?: number;
@@ -419,6 +427,7 @@ export function JobsTable({ jobs, pageSize = 10 }: JobsTableProps) {
               if (!column) return null;
               const value =
                 typeof column.getFilterValue() === 'string' ? (column.getFilterValue() as string) : '';
+              const isNumberInput = (control.type ?? 'text') === 'number';
               return (
                 <label
                   key={control.id}
@@ -428,7 +437,17 @@ export function JobsTable({ jobs, pageSize = 10 }: JobsTableProps) {
                   <input
                     type={control.type ?? 'text'}
                     value={value}
-                    onChange={(event) => column.setFilterValue(event.target.value || undefined)}
+                    min={isNumberInput ? 0 : undefined}
+                    inputMode={isNumberInput ? 'numeric' : undefined}
+                    onChange={(event) => {
+                      const rawValue = event.target.value;
+                      if (!isNumberInput) {
+                        column.setFilterValue(rawValue || undefined);
+                        return;
+                      }
+                      const sanitizedValue = ensureNonNegativeNumericString(rawValue);
+                      column.setFilterValue(sanitizedValue);
+                    }}
                     placeholder={control.placeholder}
                     className="w-28 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 placeholder:text-slate-400 focus:border-[#56949f] focus:outline-none focus:ring-1 focus:ring-[#56949f]/40"
                   />

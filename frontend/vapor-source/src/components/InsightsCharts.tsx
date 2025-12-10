@@ -190,6 +190,10 @@ export function DomainPopularityChart({
   const layout = useMemo<Partial<Layout>>(
     () => ({
       ...baseHorizontalBarLayout,
+      xaxis: {
+        ...(baseHorizontalBarLayout.xaxis ?? {}),
+        title: { text: 'Postings' },
+      },
       height:
         height ??
         Math.max(
@@ -207,9 +211,9 @@ export function DomainPopularityChart({
     >
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Domain popularity</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Domain Popularity</h3>
         </div>
-        <span className="text-xs font-semibold uppercase text-black">{totalJobs} jobs</span>
+        <span className="text-xs font-semibold uppercase text-slate-600">{totalJobs} jobs</span>
       </div>
       {domains.length > 0 ? (
         <div className="flex-1" style={{ minHeight: 0 }}>
@@ -254,7 +258,7 @@ export function ModalityPopularityChart({ modalities }: ModalityPopularityChartP
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">Modality mix</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Modality Mix</h3>
       </div>
       {modalities.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
@@ -297,7 +301,7 @@ export function DegreeRequirementsChart({ degrees }: DegreeRequirementsChartProp
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">Degree requirements</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Degree Requirements</h3>
       </div>
       {degrees.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
@@ -343,7 +347,7 @@ export function YoeDistributionChart({ buckets, height }: YoeDistributionChartPr
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">YOE distribution</h3>
+        <h3 className="text-sm font-semibold text-slate-900">YOE Distribution</h3>
       </div>
       {buckets.some((entry) => entry.count > 0) ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
@@ -434,7 +438,7 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">YOE beeswarm by language</h3>
+        <h3 className="text-sm font-semibold text-slate-900">YOE Beeswarm By Language</h3>
       </div>
       {samples.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
@@ -483,7 +487,7 @@ export function DomainYoeHeatmap({ data }: DomainYoeHeatmapProps) {
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">YOE heatmap by domain</h3>
+        <h3 className="text-sm font-semibold text-slate-900">YOE Heatmap By Domain</h3>
       </div>
       {data.domains.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${layout.height as number}px` }} />
@@ -500,6 +504,10 @@ type DomainPopularityTrendChartProps = {
 };
 
 export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTrendChartProps) {
+  const MAX_TICKS = 10;
+  const tickStep = Math.ceil(dates.length / MAX_TICKS);
+  const tickDates = dates.filter((_, idx) => idx % tickStep === 0);
+
   const colorMap = useMemo(() => {
     const map = new Map<string, string>();
     const length = chartPalette.length;
@@ -541,8 +549,8 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
       font: baseFont,
       xaxis: {
         type: 'category',
-        tickvals: dates,
-        ticktext: dates.map((date) => date.slice(5)),
+        tickvals: tickDates,
+        tickDates: tickDates.map((d) => d.slice(5)),
         tickangle: -30,
       },
       yaxis: { title: { text: 'Postings per day' }, rangemode: 'tozero' },
@@ -555,7 +563,7 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">Domain popularity over time</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Domain Popularity Over Time</h3>
       </div>
       {series.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${layout.height as number}px` }} />

@@ -291,13 +291,13 @@ export function JobsInsights({ jobs }: JobsInsightsProps) {
       <div className="grid gap-4 lg:grid-cols-2">
         <MinYoeBoxPlot
           stats={languageBoxData}
-          title="Min YOE by language"
+          title="Min YOE By Language"
           color={primaryLanguageColor}
           emptyMessage="Not enough min YOE data tied to languages yet."
         />
         <MinYoeBoxPlot
           stats={domainBoxData}
-          title="Min YOE by domain"
+          title="Min YOE By Domain"
           color={primaryDomainColor}
           emptyMessage="No posted domains with min YOE yet."
         />
