@@ -14,7 +14,7 @@ const Plot = createPlotlyComponent(Plotly);
 const chartPalette = ['#f2e9e1', '#286983', '#56949f', '#797593', '#9893a5', '#907aa9', '#b4637a', '#d7827e', '#ea9d34'] as const;
 const beeswarmPalette = chartPalette.filter((color) => color !== '#f2e9e1');
 const basePlotConfig = { displayModeBar: false, responsive: true } as const;
-const baseFont = { family: 'Inter, system-ui, sans-serif', color: chartPalette[3] };
+const baseFont = { family: 'Inter, system-ui, sans-serif', color: '#000000' };
 const domainFill = chartPalette[5];
 const modalityFill = chartPalette[7];
 const degreeFill = chartPalette[4];
@@ -209,7 +209,7 @@ export function DomainPopularityChart({
         <div>
           <h3 className="text-sm font-semibold text-slate-900">Domain popularity</h3>
         </div>
-        <span className="text-xs font-semibold uppercase text-slate-400">{totalJobs} jobs</span>
+        <span className="text-xs font-semibold uppercase text-black">{totalJobs} jobs</span>
       </div>
       {domains.length > 0 ? (
         <div className="flex-1" style={{ minHeight: 0 }}>

@@ -8,19 +8,26 @@ export default defineConfig(({ mode }) => {
   const snapshotProxyTarget = env.VITE_SNAPSHOT_PROXY_TARGET
 
   return {
+    define: {
+      global: 'globalThis',
+    },
     plugins: [
-      react(),
+      react({
+        babel: {
+          plugins: ['babel-plugin-react-compiler'],
+        },
+      }),
       tailwindcss(),
     ],
     server: {
       proxy: snapshotProxyTarget
         ? {
-            '/snapshots': {
-              target: snapshotProxyTarget,
-              changeOrigin: true,
-              rewrite: (path) => path.replace(/^\/snapshots/, ''),
-            },
-          }
+          '/snapshots': {
+            target: snapshotProxyTarget,
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/snapshots/, ''),
+          },
+        }
         : undefined,
     },
   }

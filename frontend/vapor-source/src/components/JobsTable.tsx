@@ -25,13 +25,12 @@ declare module '@tanstack/react-table' {
 }
 
 const columnHelper = createColumnHelper<Job>();
-const tablePalette = ['#fffcf7', '#286983', '#797593', '#9893a5', '#907aa9', '#b4637a', '#d7827e', '#56949f', '#ea9d34'] as const;
-const zebraRowColor = tablePalette[0];
-const pillTextColor = '#faf4ed';
+const zebraRowColor = '#fefbfb';
+const pillTextColor = '#ffffff';
 const pillColors = {
-  modality: tablePalette[5],
-  language: tablePalette[7],
-  domain: '#907aa9',
+  modality: '#8c2f46',
+  language: '#1b4e5f',
+  domain: '#5b3374',
 } as const;
 
 const lineClampStyle = (lines: number) => ({
@@ -205,7 +204,7 @@ function FilterModal({ title, options, selected, onApply, onClose }: FilterModal
                 onApply(localSelections);
                 onClose();
               }}
-            className="rounded-md bg-[#56949f] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#56949f]/90"
+              className="rounded-md bg-[#56949f] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#56949f]/90"
             >
               Apply
             </button>
