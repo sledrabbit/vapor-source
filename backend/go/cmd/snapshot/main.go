@@ -30,6 +30,9 @@ type apiResponse struct {
 	Message string `json:"message"`
 }
 
+// snapshotNow returns the current time; overridden in tests for deterministic ranges
+var snapshotNow = time.Now
+
 func handler(ctx context.Context) (Response, error) {
 	start := time.Now()
 	cfg, err := config.Load()
@@ -130,7 +133,11 @@ func determineDateRange(cfg *config.Config) (string, string, error) {
 	end := strings.TrimSpace(cfg.SnapshotEndDate)
 
 	if start == "" && end == "" {
-		today := time.Now().UTC().Format(layout)
+		loc, err := time.LoadLocation("America/Los_Angeles")
+		if err != nil {
+			return "", "", fmt.Errorf("load snapshot timezone: %w", err)
+		}
+		today := snapshotNow().In(loc).Format(layout)
 		return today, today, nil
 	}
 	if start == "" {

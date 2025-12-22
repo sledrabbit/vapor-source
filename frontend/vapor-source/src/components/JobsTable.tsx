@@ -33,6 +33,21 @@ const pillColors = {
   domain: '#5b3374',
 } as const;
 
+const DOMAIN_DISPLAY_ALIASES: Record<string, string> = {
+  'front-end': 'Frontend',
+  frontend: 'Frontend',
+  'full-stack': 'Full-Stack',
+  fullstack: 'Full-Stack',
+};
+
+function formatDomainValue(value?: string | null) {
+  if (!value) return value ?? undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const lower = trimmed.toLowerCase();
+  return DOMAIN_DISPLAY_ALIASES[lower] ?? trimmed;
+}
+
 const lineClampStyle = (lines: number) => ({
   display: '-webkit-box',
   WebkitLineClamp: lines,
@@ -346,10 +361,10 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
         cell: (info) =>
           info.getValue() ? (
             <span
-              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+              className="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
               style={{ backgroundColor: pillColors.domain, color: pillTextColor }}
             >
-              {info.getValue()}
+              {formatDomainValue(info.getValue())}
             </span>
           ) : (
             '—'

@@ -206,7 +206,7 @@ export function JobsInsights({ jobs }: JobsInsightsProps) {
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
     const selectTopLanguages = () => {
-      const limit = 12;
+      const limit = 10;
       const top = languageStats.slice(0, limit);
       const seen = new Set(top.map((entry) => entry.label));
       for (const lang of PRIORITY_LANGUAGES) {
@@ -220,7 +220,7 @@ export function JobsInsights({ jobs }: JobsInsightsProps) {
       return top;
     };
 
-    const baseLanguageStats = languageStats.slice(0, 12);
+    const baseLanguageStats = languageStats.slice(0, 10);
     const topLanguageStats = selectTopLanguages();
     const topLanguageLabels = topLanguageStats.map((entry) => entry.label);
     const filteredSamples = languageSamples.filter((sample) =>
