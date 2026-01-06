@@ -6,7 +6,6 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
-  type ColumnDef,
   type ColumnFiltersState,
   type FilterFn,
   type PaginationState,
@@ -282,7 +281,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
     };
   }, [jobs]);
 
-  const columns = useMemo<ColumnDef<Job>[]>(() => {
+  const columns = useMemo(() => {
     return [
       columnHelper.accessor('postedDate', {
         header: 'Posted',
@@ -371,29 +370,29 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
             '—'
           ),
       }),
-      columnHelper.accessor('technologies', {
-        header: 'Technologies',
-        filterFn: multiSelectFilter,
-        meta: { filterType: 'multi', options: filterOptions.technologies, title: 'Technologies' },
-        cell: (info) => {
-          const tech = info.getValue() ?? [];
-          return <ClampedText text={tech.length ? tech.join(', ') : ''} />;
-        },
-      }),
-      columnHelper.accessor('minDegree', {
-        header: 'Degree',
-        filterFn: multiSelectFilter,
-        meta: { filterType: 'multi', options: filterOptions.degrees, title: 'Degree' },
-        cell: (info) => info.getValue() || 'Unspecified',
-      }),
-      columnHelper.accessor('parsedDescription', {
-        header: 'Parsed Description',
-        enableColumnFilter: false,
-        enableSorting: false,
-        cell: (info) => {
-          return <ClampedText text={info.getValue() ?? ''} lines={3} className="text-[var(--text-primary)]" />;
-        },
-      }),
+        columnHelper.accessor('technologies', {
+          header: 'Technologies',
+          filterFn: multiSelectFilter,
+          meta: { filterType: 'multi', options: filterOptions.technologies, title: 'Technologies' },
+          cell: (info) => {
+            const tech = info.getValue() ?? [];
+            return <ClampedText text={tech.length ? tech.join(', ') : ''} />;
+          },
+        }),
+        columnHelper.accessor('minDegree', {
+          header: 'Degree',
+          filterFn: multiSelectFilter,
+          meta: { filterType: 'multi', options: filterOptions.degrees, title: 'Degree' },
+          cell: (info) => info.getValue() || 'Unspecified',
+        }),
+        columnHelper.accessor('parsedDescription', {
+          header: 'Parsed Description',
+          enableColumnFilter: false,
+          enableSorting: false,
+          cell: (info) => {
+            return <ClampedText text={info.getValue() ?? ''} lines={3} className="text-[var(--text-primary)]" />;
+          },
+        }),
     ];
   }, [filterOptions]);
 
