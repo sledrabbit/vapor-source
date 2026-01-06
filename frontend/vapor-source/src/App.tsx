@@ -28,14 +28,16 @@ function App() {
               the minimum years of experience, software domain, work modality, and technology used for the role.
             </p>
           </div>
-          <ThemeToggle />
+          <div className="flex justify-end md:justify-start">
+            <ThemeToggle />
+          </div>
         </div>
       </section>
 
       <section className="surface-card mx-auto mt-6 w-full max-w-6xl rounded-2xl p-6 sm:p-8">
         <div className="flex flex-col gap-1">
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">Snapshot Insights</h2>
-          <p className="text-sm text-[var(--text-muted)]">Aggregated analytics from the most recent 90-day snapshot window.</p>
+          <p className="text-sm text-[var(--text-muted)]">Aggregated analytics from the most recent 30-day snapshot window.</p>
         </div>
         <div className="mt-5">
           {loading && <InsightsSkeleton />}

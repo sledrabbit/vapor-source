@@ -692,15 +692,13 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
           <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${layout.height as number}px` }} />
           {legendEntries.length > 0 && (
             <div className="mt-3 overflow-x-auto pb-1">
-              <div className="flex w-full min-w-full justify-center gap-4 text-xs font-semibold text-[var(--text-secondary)]">
-                <div className="flex min-w-max items-center gap-4">
-                  {legendEntries.map((entry) => (
-                    <span key={entry.domain} className="inline-flex items-center gap-2 whitespace-nowrap">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} aria-hidden="true" />
-                      {entry.domain}
-                    </span>
-                  ))}
-                </div>
+              <div className="flex min-w-max items-center gap-4 text-xs font-semibold text-[var(--text-secondary)]">
+                {legendEntries.map((entry) => (
+                  <span key={entry.domain} className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} aria-hidden="true" />
+                    {entry.domain}
+                  </span>
+                ))}
               </div>
             </div>
           )}

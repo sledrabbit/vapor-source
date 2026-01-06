@@ -439,7 +439,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
     <div className="mt-6 space-y-6">
       <section>
         <div className="flex flex-wrap items-end justify-between gap-3 px-2 pb-3">
-          <div className="flex flex-1 flex-wrap gap-3">
+          <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:flex-1 sm:flex-wrap">
             {textFilterControls.map((control) => {
               const column = table.getColumn(control.id);
               if (!column) return null;
@@ -449,7 +449,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
               return (
                 <label
                   key={control.id}
-                  className="flex flex-col items-center gap-1 text-center text-[11px] font-semibold uppercase text-[var(--text-primary)]"
+                  className="flex flex-col items-start gap-1 text-left text-[11px] font-semibold uppercase text-[var(--text-primary)] sm:items-center sm:text-center"
                 >
                   <span>{control.label}</span>
                   <input
@@ -481,7 +481,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
               return (
                 <label
                   key={filter.id}
-                  className="flex flex-col items-center gap-1 text-center text-[11px] font-semibold uppercase text-[var(--text-primary)]"
+                  className="flex flex-col items-start gap-1 text-left text-[11px] font-semibold uppercase text-[var(--text-primary)] sm:items-center sm:text-center"
                 >
                   <span>{filter.label}</span>
                   <button
