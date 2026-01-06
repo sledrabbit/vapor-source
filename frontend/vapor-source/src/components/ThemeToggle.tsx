@@ -8,37 +8,79 @@ const THEME_LABEL: Record<ThemeMode, string> = {
   dark: 'Dark',
 };
 
-function getInitialMode(): ThemeMode {
-  if (typeof window === 'undefined') return 'light';
-  const stored = window.localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-  if (stored === 'light' || stored === 'dark') {
-    return stored;
+const getSystemMode = (): ThemeMode => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return 'light';
   }
-  if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
-    return 'dark';
-  }
-  return 'light';
-}
-
-function applyTheme(mode: ThemeMode) {
-  if (typeof document === 'undefined') return;
-  const root = document.documentElement;
-  root.dataset.theme = mode;
-}
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+};
 
 export function ThemeToggle() {
-  const [mode, setMode] = useState<ThemeMode>(() => getInitialMode());
+  const [systemMode, setSystemMode] = useState<ThemeMode>(() => getSystemMode());
+  const [locked, setLocked] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    return stored === 'light' || stored === 'dark';
+  });
+  const [mode, setMode] = useState<ThemeMode>(() => {
+    if (typeof window === 'undefined') return 'light';
+    const stored = window.localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
+    if (stored === 'light' || stored === 'dark') {
+      return stored;
+    }
+    return getSystemMode();
+  });
 
   useEffect(() => {
-    applyTheme(mode);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, mode);
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (locked) {
+      root.dataset.theme = mode;
+    } else {
+      root.removeAttribute('data-theme');
     }
-  }, [mode]);
+  }, [mode, locked]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (locked) {
+      window.localStorage.setItem(STORAGE_KEY, mode);
+    } else {
+      window.localStorage.removeItem(STORAGE_KEY);
+    }
+  }, [mode, locked]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      const next = event.matches ? 'dark' : 'light';
+      setSystemMode(next);
+      setLocked(false);
+      setMode(next);
+    };
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', handleChange);
+    } else {
+      media.onchange = handleChange;
+    }
+    return () => {
+      if (typeof media.removeEventListener === 'function') {
+        media.removeEventListener('change', handleChange);
+      } else {
+        media.onchange = null;
+      }
+    };
+  }, []);
 
   const handleToggle = useCallback(() => {
-    setMode((current) => (current === 'light' ? 'dark' : 'light'));
-  }, []);
+    setMode((current) => {
+      const base = locked ? current : systemMode;
+      const next = base === 'light' ? 'dark' : 'light';
+      setLocked(next !== systemMode);
+      return next;
+    });
+  }, [locked, systemMode]);
 
   const isDark = mode === 'dark';
 

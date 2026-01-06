@@ -282,7 +282,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
     };
   }, [jobs]);
 
-  const columns = useMemo<ColumnDef<Job, unknown>[]>(() => {
+  const columns = useMemo<ColumnDef<Job>[]>(() => {
     return [
       columnHelper.accessor('postedDate', {
         header: 'Posted',
