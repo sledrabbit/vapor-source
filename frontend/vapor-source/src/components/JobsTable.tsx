@@ -7,12 +7,14 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnFiltersState,
+  type ColumnSizingInfoState,
+  type ColumnSizingState,
   type FilterFn,
   type PaginationState,
   type RowData,
   type SortingState,
 } from '@tanstack/react-table';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { Job } from '../types/job';
 
 declare module '@tanstack/react-table' {
@@ -147,6 +149,7 @@ function formatFilterValue(value: unknown) {
 
 const textFilterControls = [
   { id: 'location', label: 'Location', placeholder: 'Filter location' },
+  { id: 'company', label: 'Company', placeholder: 'Filter company' },
   { id: 'minYearsExperience', label: 'Min YOE', placeholder: 'Up to…', type: 'number' as const },
 ];
 
@@ -238,6 +241,87 @@ function FilterModal({ title, options, selected, onApply, onClose }: FilterModal
   );
 }
 
+type JobDetailModalProps = {
+  job: Job;
+  onClose: () => void;
+};
+
+function formatList(values?: string[] | null) {
+  if (!values || values.length === 0) return '—';
+  return values.join(', ');
+}
+
+function JobDetailModal({ job, onClose }: JobDetailModalProps) {
+  const infoItems = [
+    { label: 'Company', value: job.company ?? '—' },
+    { label: 'Location', value: job.location ?? '—' },
+    { label: 'Modality', value: job.modality ?? '—' },
+    { label: 'Domain', value: job.domain ?? '—' },
+    { label: 'Min YOE', value: job.minYearsExperience ?? '—' },
+    { label: 'Degree', value: job.minDegree ?? '—' },
+    { label: 'Languages', value: formatList(job.languages) },
+    { label: 'Technologies', value: formatList(job.technologies) },
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--modal-overlay)] px-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-background)] p-5 shadow-[var(--surface-shadow)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">{job.postedDate}</p>
+            <h3 className="mt-1 text-lg font-semibold text-[var(--text-primary)]">
+              <a
+                href={job.url}
+                target="_blank"
+                rel="noreferrer"
+                className="underline decoration-[var(--text-muted)] underline-offset-2 transition hover:text-[var(--accent-primary)] hover:decoration-[var(--accent-primary)]"
+              >
+                {job.title}
+              </a>
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1 text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)]"
+            aria-label="Close job details"
+          >
+            ×
+          </button>
+        </div>
+        <div className="mt-4 max-h-[70vh] overflow-y-auto pr-1 text-sm text-[var(--text-primary)]">
+          <div className="space-y-3">
+            {infoItems.map((item) => (
+              <div key={item.label}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+                  {item.label}
+                </p>
+                <p className="mt-0.5 text-[var(--text-primary)]">{item.value || '—'}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+              Parsed Description
+            </p>
+            <p className="mt-0.5 whitespace-pre-wrap leading-relaxed text-[var(--text-primary)]">
+              {job.parsedDescription?.trim() ? job.parsedDescription : 'No parsed description available.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type JobsTableProps = {
   jobs: Job[];
   pageSize?: number;
@@ -246,14 +330,47 @@ type JobsTableProps = {
 const pageSizeOptions = [10, 25, 50, 100];
 
 export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
+  const defaultColumnSizingRef = useRef<ColumnSizingState>({ postedDate: 120 });
   const [sorting, setSorting] = useState<SortingState>([{ id: 'postedDate', desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize });
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(defaultColumnSizingRef.current);
+  const [columnSizingInfo, setColumnSizingInfo] = useState<ColumnSizingInfoState>({} as ColumnSizingInfoState);
   const [activeFilterColumnId, setActiveFilterColumnId] = useState<string>();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState<number>();
+  const hasCustomSizing = useMemo(() => {
+    const defaultEntries = Object.entries(defaultColumnSizingRef.current);
+    const currentEntries = Object.entries(columnSizing);
+    if (currentEntries.length === 0) return false;
+    if (currentEntries.length === defaultEntries.length) {
+      const matchesDefault = currentEntries.every(
+        ([key, value]) =>
+          Object.prototype.hasOwnProperty.call(defaultColumnSizingRef.current, key) &&
+          defaultColumnSizingRef.current[key] === value,
+      );
+      if (matchesDefault) return false;
+    }
+    return true;
+  }, [columnSizing]);
+  const headerRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
+  const initialColumnSizesRef = useRef<Record<string, number>>({ postedDate: 120 });
+  const [selectedJob, setSelectedJob] = useState<Job>();
 
   useEffect(() => {
     setPagination((prev) => ({ ...prev, pageSize }));
   }, [pageSize]);
+
+  useEffect(() => {
+    const element = scrollContainerRef.current;
+    if (!element) return;
+    const updateWidth = () => setContainerWidth(element.clientWidth);
+    updateWidth();
+    const observer = new ResizeObserver(() => updateWidth());
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
 
   const filterOptions = useMemo(() => {
     const modality = new Set<string>();
@@ -286,6 +403,9 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
       columnHelper.accessor('postedDate', {
         header: 'Posted',
         enableColumnFilter: false,
+        size: 80,
+        minSize: 80,
+        maxSize: 260,
       }),
       columnHelper.accessor('title', {
         header: 'Role',
@@ -299,15 +419,20 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
                 target="_blank"
                 rel="noreferrer"
                 className="font-semibold text-[var(--text-primary)] underline decoration-[var(--text-muted)] underline-offset-2 transition hover:text-[var(--accent-primary)] hover:decoration-[var(--accent-primary)]"
+                onClick={(event) => event.stopPropagation()}
                 style={lineClampStyle(3)}
                 title={info.getValue() ?? ''}
               >
                 {info.getValue()}
               </a>
-              <ClampedText className="text-sm text-[var(--text-secondary)]" lines={1} text={job.company} />
             </div>
           );
         },
+      }),
+      columnHelper.accessor('company', {
+        header: 'Company',
+        filterFn: defaultTextFilter,
+        cell: (info) => info.getValue() || '—',
       }),
       columnHelper.accessor('location', {
         header: 'Location',
@@ -374,27 +499,25 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
           header: 'Technologies',
           filterFn: multiSelectFilter,
           meta: { filterType: 'multi', options: filterOptions.technologies, title: 'Technologies' },
+          size: 150,
+          minSize: 90,
+          maxSize: 300,
           cell: (info) => {
-            const tech = info.getValue() ?? [];
-            return <ClampedText text={tech.length ? tech.join(', ') : ''} />;
+            const tech = (info.getValue() ?? []) as string[];
+            if (!tech.length) {
+              return <span className="text-[var(--text-primary)]/80">—</span>;
+            }
+            return <ClampedText text={tech.join(', ')} className="text-[var(--text-primary)]" />;
           },
         }),
-        columnHelper.accessor('minDegree', {
-          header: 'Degree',
-          filterFn: multiSelectFilter,
-          meta: { filterType: 'multi', options: filterOptions.degrees, title: 'Degree' },
-          cell: (info) => info.getValue() || 'Unspecified',
-        }),
-        columnHelper.accessor('parsedDescription', {
-          header: 'Parsed Description',
-          enableColumnFilter: false,
-          enableSorting: false,
-          cell: (info) => {
-            return <ClampedText text={info.getValue() ?? ''} lines={3} className="text-[var(--text-primary)]" />;
-          },
-        }),
-    ];
-  }, [filterOptions]);
+      columnHelper.accessor('minDegree', {
+        header: 'Degree',
+        filterFn: multiSelectFilter,
+        meta: { filterType: 'multi', options: filterOptions.degrees, title: 'Degree' },
+        cell: (info) => info.getValue() || 'Unspecified',
+      }),
+   ];
+ }, [filterOptions]);
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -407,9 +530,32 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
     onColumnFiltersChange: setColumnFilters,
-    state: { sorting, pagination, columnFilters },
+    onColumnSizingChange: setColumnSizing,
+    onColumnSizingInfoChange: setColumnSizingInfo,
+    columnResizeMode: 'onChange',
+    state: { sorting, pagination, columnFilters, columnSizing, columnSizingInfo },
     autoResetPageIndex: false,
   });
+
+  useEffect(() => {
+    if (!columnSizingInfo.isResizingColumn || hasCustomSizing) {
+      return;
+    }
+    const entries: ColumnSizingState = {};
+    table.getFlatHeaders().forEach((header) => {
+      const element = headerRefs.current[header.id];
+      if (element) {
+        const width = element.getBoundingClientRect().width;
+        entries[header.column.id] = width;
+        if (!(header.column.id in initialColumnSizesRef.current)) {
+          initialColumnSizesRef.current[header.column.id] = width;
+        }
+      }
+    });
+    if (Object.keys(entries).length > 0) {
+      setColumnSizing((prev) => ({ ...prev, ...entries }));
+    }
+  }, [columnSizingInfo.isResizingColumn, hasCustomSizing, table]);
 
   const activeColumn = activeFilterColumnId ? table.getColumn(activeFilterColumnId) : undefined;
   const activeSelections = Array.isArray(activeColumn?.getFilterValue())
@@ -525,45 +671,132 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
             ))}
           </div>
         )}
+        <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
+          Click or tap any row to view full job details.
+        </p>
         <div className="overflow-hidden rounded-2xl border border-[var(--surface-border)]">
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0 text-sm text-[var(--text-primary)]">
+          <div className="overflow-x-auto" ref={scrollContainerRef}>
+            <table
+              className="border-separate border-spacing-0 text-sm text-[var(--text-primary)]"
+              style={
+                hasCustomSizing && containerWidth
+                  ? { width: `${Math.max(containerWidth, table.getTotalSize())}px`, minWidth: 'min(900px, 100%)' }
+                  : { width: '100%', minWidth: '900px' }
+              }
+            >
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} style={{ backgroundColor: zebraRowColor }}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="border-b border-[var(--surface-border)] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-primary)]"
-                      >
-                        {header.isPlaceholder ? null : (
-                          <button
-                            type="button"
-                            className="flex items-center gap-1 text-left"
-                            onClick={header.column.getToggleSortingHandler()}
-                          >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {{
-                              asc: '↑',
-                              desc: '↓',
-                            }[header.column.getIsSorted() as 'asc' | 'desc'] ?? null}
-                          </button>
-                        )}
-                      </th>
-                    ))}
+                    {headerGroup.headers.map((header) => {
+                      const size = header.getSize();
+                      const minSize = header.column.columnDef.minSize;
+                      const maxSize = header.column.columnDef.maxSize;
+                      const seededSize = columnSizing[header.column.id];
+                      const enforceSize = seededSize != null || hasCustomSizing;
+                      return (
+                        <th
+                          key={header.id}
+                          ref={(element) => {
+                            if (element) {
+                              headerRefs.current[header.id] = element;
+                            } else {
+                              delete headerRefs.current[header.id];
+                            }
+                          }}
+                          className="group border-b border-[var(--surface-border)] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-primary)]"
+                          style={
+                            enforceSize
+                              ? {
+                                  width: seededSize ?? size ?? undefined,
+                                  minWidth: (seededSize ?? minSize) ?? undefined,
+                                  maxWidth: maxSize ?? undefined,
+                                }
+                              : undefined
+                          }
+                        >
+                          {header.isPlaceholder ? null : (
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="flex flex-1 items-center gap-1 text-left"
+                                onClick={header.column.getToggleSortingHandler()}
+                              >
+                                {flexRender(header.column.columnDef.header, header.getContext())}
+                                {{
+                                  asc: '↑',
+                                  desc: '↓',
+                                }[header.column.getIsSorted() as 'asc' | 'desc'] ?? null}
+                              </button>
+                              {header.column.getCanResize() && (
+                                <span
+                                  onMouseDown={header.getResizeHandler()}
+                                  onTouchStart={header.getResizeHandler()}
+                                  onDoubleClick={() => {
+                                    const initialSize = initialColumnSizesRef.current[header.column.id];
+                                    if (typeof initialSize === 'number') {
+                                      setColumnSizing((prev) => ({
+                                        ...prev,
+                                        [header.column.id]: initialSize,
+                                      }));
+                                    } else {
+                                      header.column.resetSize();
+                                    }
+                                  }}
+                                  className={`h-6 w-px cursor-col-resize select-none rounded-full transition ${header.column.getIsResizing()
+                                    ? 'bg-[var(--accent-primary)] opacity-100'
+                                    : 'bg-[var(--text-secondary)]/30 opacity-70'
+                                    }`}
+                                  aria-hidden="true"
+                                />
+                              )}
+                            </div>
+                          )}
+                        </th>
+                      );
+                    })}
                   </tr>
                 ))}
               </thead>
               <tbody>
-                {table.getRowModel().rows.map((row, rowIdx) => (
-                  <tr key={row.id} style={rowIdx % 2 === 0 ? undefined : { backgroundColor: zebraRowColor }}>
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-3 py-3 align-top text-[var(--text-primary)]">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                {table.getRowModel().rows.map((row, rowIdx) => {
+                  const handleRowSelect = () => setSelectedJob(row.original);
+                  const handleKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleRowSelect();
+                    }
+                  };
+                  return (
+                    <tr
+                      key={row.id}
+                      onClick={handleRowSelect}
+                      onKeyDown={handleKeyDown}
+                      tabIndex={0}
+                      className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-background)]"
+                      style={rowIdx % 2 === 0 ? undefined : { backgroundColor: zebraRowColor }}
+                    >
+                      {row.getVisibleCells().map((cell) => {
+                        const seededSize = columnSizing[cell.column.id];
+                        const enforceSize = seededSize != null || hasCustomSizing;
+                        return (
+                          <td
+                            key={cell.id}
+                          className="px-3 py-3 align-top text-[var(--text-primary)]"
+                          style={
+                            enforceSize
+                              ? {
+                                  width: seededSize ?? cell.column.getSize(),
+                                }
+                              : undefined
+                          }
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                      );
+                    })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -617,6 +850,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
           onApply={(values) => activeColumn.setFilterValue(values.length ? values : undefined)}
         />
       )}
+      {selectedJob && <JobDetailModal job={selectedJob} onClose={() => setSelectedJob(undefined)} />}
     </div>
   );
 }

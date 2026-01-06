@@ -50,7 +50,9 @@
 .surface-card {
   background-color: #ffffff;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 30px 80px rgba(248, 235, 222, 0.32);
+  box-shadow:
+    0 4px 10px rgba(15, 23, 42, 0.06),
+    0 1px 1px rgba(15, 23, 42, 0.04);
 }
 
 .surface-panel {
@@ -64,7 +66,9 @@
 [data-theme='dark'] .surface-card {
   background-color: var(--surface-background);
   border-color: var(--surface-border);
-  box-shadow: var(--surface-shadow);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.28),
+    0 1px 1px rgba(0, 0, 0, 0.2);
 }
 
 [data-theme='dark'] .surface-panel {
@@ -79,7 +83,9 @@
   :root:not([data-theme]) .surface-card {
     background-color: var(--surface-background);
     border-color: var(--surface-border);
-    box-shadow: var(--surface-shadow);
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.28),
+      0 1px 1px rgba(0, 0, 0, 0.2);
   }
 
   :root:not([data-theme]) .surface-panel {
@@ -93,9 +99,9 @@
 
 [data-theme='dark'] {
   color-scheme: dark;
-  --background-root: #000000;
-  --background-app: #000000;
-  --surface-background: #232136;
+  --background-root: #1f2336;
+  --background-app: #1f2336;
+  --surface-background: #24283b;
   --surface-border: #393552;
   --surface-muted: #2a273f;
   --surface-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
@@ -131,9 +137,9 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --background-root: #000000;
-    --background-app: #000000;
-    --surface-background: #232136;
+    --background-root: #1f2336;
+    --background-app: #1f2336;
+    --surface-background: #24283b;
     --surface-border: #393552;
     --surface-muted: #2a273f;
     --surface-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
