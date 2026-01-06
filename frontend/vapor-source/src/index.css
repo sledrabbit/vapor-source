@@ -4,12 +4,167 @@
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   line-height: 1.6;
   font-weight: 400;
-  color: #0f172a;
-  background-color: #f8fafc;
+  color: var(--text-primary);
+  background-color: var(--background-root);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
+
+  --background-root: #f8fafc;
+  --background-app: linear-gradient(180deg, rgba(255, 255, 252, 0.25), #ffffff 55%, #ffffff);
+  --surface-background: #ffffff;
+  --surface-border: #e2e8f0;
+  --surface-muted: #f8fafc;
+  --surface-shadow: 0 30px 80px rgba(248, 235, 222, 0.32);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --accent-primary: #56949f;
+  --table-row-zebra: #fefbfb;
+  --pill-text: #ffffff;
+  --pill-modality-bg: #8c2f46;
+  --pill-language-bg: #1b4e5f;
+  --pill-domain-bg: #5b3374;
+  --modal-overlay: rgba(15, 23, 42, 0.4);
+  --chip-border: rgba(86, 148, 159, 0.3);
+  --chip-hover-border: rgba(86, 148, 159, 0.5);
+  --chip-bg: rgba(86, 148, 159, 0.1);
+  --chip-text: #56949f;
+
+  --chart-grid-color: #e2e8f0;
+  --chart-hover-label-font: #9893a5;
+  --chart-hover-label-bg: #f2e9e1;
+  --chart-color-1: #f2e9e1;
+  --chart-color-2: #286983;
+  --chart-color-3: #56949f;
+  --chart-color-4: #797593;
+  --chart-color-5: #9893a5;
+  --chart-color-6: #907aa9;
+  --chart-color-7: #b4637a;
+  --chart-color-8: #d7827e;
+  --chart-color-9: #ea9d34;
+}
+
+.surface-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 30px 80px rgba(248, 235, 222, 0.32);
+}
+
+.surface-panel {
+  background-color: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.04);
+  box-shadow:
+    0 4px 10px rgba(15, 23, 42, 0.06),
+    0 1px 1px rgba(15, 23, 42, 0.04);
+}
+
+[data-theme='dark'] .surface-card {
+  background-color: var(--surface-background);
+  border-color: var(--surface-border);
+  box-shadow: var(--surface-shadow);
+}
+
+[data-theme='dark'] .surface-panel {
+  background-color: var(--surface-background);
+  border-color: rgba(226, 232, 240, 0.08);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.28),
+    0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .surface-card {
+    background-color: var(--surface-background);
+    border-color: var(--surface-border);
+    box-shadow: var(--surface-shadow);
+  }
+
+  :root:not([data-theme]) .surface-panel {
+    background-color: var(--surface-background);
+    border-color: rgba(226, 232, 240, 0.08);
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.28),
+      0 1px 1px rgba(0, 0, 0, 0.2);
+  }
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --background-root: #000000;
+  --background-app: #000000;
+  --surface-background: #232136;
+  --surface-border: #393552;
+  --surface-muted: #2a273f;
+  --surface-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+  --text-primary: #e0def4;
+  --text-secondary: #908caa;
+  --text-muted: #6e6a86;
+  --accent-primary: #9ccfd8;
+  --table-row-zebra: rgba(255, 255, 255, 0.04);
+  --pill-text: #121019;
+  --pill-modality-bg: #eb6f92;
+  --pill-language-bg: #3e8fb0;
+  --pill-domain-bg: #c4a7e7;
+  --modal-overlay: rgba(2, 6, 23, 0.7);
+  --chip-border: rgba(62, 143, 176, 0.4);
+  --chip-hover-border: rgba(62, 143, 176, 0.7);
+  --chip-bg: rgba(62, 143, 176, 0.15);
+  --chip-text: #3e8fb0;
+
+  --chart-grid-color: #393552;
+  --chart-hover-label-font: #e0def4;
+  --chart-hover-label-bg: #393552;
+  --chart-color-1: #f2e9e1;
+  --chart-color-2: #31748f;
+  --chart-color-3: #9ccfd8;
+  --chart-color-4: #908caa;
+  --chart-color-5: #6e6a86;
+  --chart-color-6: #c4a7e7;
+  --chart-color-7: #eb6f92;
+  --chart-color-8: #ebbcba;
+  --chart-color-9: #f6c177;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --background-root: #000000;
+    --background-app: #000000;
+    --surface-background: #232136;
+    --surface-border: #393552;
+    --surface-muted: #2a273f;
+    --surface-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+    --text-primary: #e0def4;
+    --text-secondary: #908caa;
+    --text-muted: #6e6a86;
+    --accent-primary: #9ccfd8;
+    --table-row-zebra: rgba(255, 255, 255, 0.04);
+    --pill-text: #121019;
+    --pill-modality-bg: #eb6f92;
+    --pill-language-bg: #3e8fb0;
+    --pill-domain-bg: #c4a7e7;
+    --modal-overlay: rgba(2, 6, 23, 0.7);
+    --chip-border: rgba(62, 143, 176, 0.4);
+    --chip-hover-border: rgba(62, 143, 176, 0.7);
+    --chip-bg: rgba(62, 143, 176, 0.15);
+    --chip-text: #3e8fb0;
+
+    --chart-grid-color: #393552;
+    --chart-hover-label-font: #e0def4;
+    --chart-hover-label-bg: #393552;
+    --chart-color-1: #f2e9e1;
+    --chart-color-2: #31748f;
+    --chart-color-3: #9ccfd8;
+    --chart-color-4: #908caa;
+    --chart-color-5: #6e6a86;
+    --chart-color-6: #c4a7e7;
+    --chart-color-7: #eb6f92;
+    --chart-color-8: #ebbcba;
+    --chart-color-9: #f6c177;
+  }
 }
 
 *,
@@ -21,7 +176,8 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #f8fafc;
+  background-color: var(--background-root);
+  color: var(--text-primary);
 }
 
 #root {

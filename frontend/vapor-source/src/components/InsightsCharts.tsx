@@ -6,73 +6,103 @@ import box from 'plotly.js/lib/box';
 import heatmap from 'plotly.js/lib/heatmap';
 import scatter from 'plotly.js/lib/scatter';
 import createPlotlyComponent from 'react-plotly.js/factory';
+import { usePlotThemeContext } from '../hooks/theme';
 
 Plotly.register([box, bar, scatter, heatmap]);
 
 const Plot = createPlotlyComponent(Plotly);
 
-const chartPalette = ['#f2e9e1', '#286983', '#56949f', '#797593', '#9893a5', '#907aa9', '#b4637a', '#d7827e', '#ea9d34'] as const;
-const beeswarmPalette = chartPalette.filter((color) => color !== '#f2e9e1');
 const basePlotConfig = { displayModeBar: false, responsive: true } as const;
-const baseFont = { family: 'Inter, system-ui, sans-serif', color: '#000000' };
-const domainFill = chartPalette[5];
-const modalityFill = chartPalette[7];
-const degreeFill = chartPalette[4];
-const yoeFill = chartPalette[2];
-const hoverLabelFontColor = chartPalette[4];
-const hoverLabelBgColor = chartPalette[0];
-const heatmapColorscale = (() => {
-  const steps = [
-    chartPalette[0],
-    chartPalette[1],
-    chartPalette[2],
-    chartPalette[3],
-    chartPalette[4],
-    chartPalette[5],
-    chartPalette[6],
-    chartPalette[7],
-    chartPalette[8],
-  ];
-  const segment = 1 / (steps.length - 1);
+function buildHeatmapColorscale(palette: string[]) {
+  const steps = palette.slice(0, 9);
+  const segment = steps.length > 1 ? 1 / (steps.length - 1) : 1;
   return steps.map((color, index) => [Number((index * segment).toFixed(4)), color]) as Array<[number, string]>;
-})();
+}
 
-const baseBoxLayout: Partial<Layout> = {
-  margin: { l: 60, r: 20, t: 40, b: 80 },
-  paper_bgcolor: 'rgba(0,0,0,0)',
-  plot_bgcolor: 'rgba(0,0,0,0)',
-  showlegend: false,
-  hovermode: 'closest',
-  font: baseFont,
-  yaxis: {
-    title: { text: 'Min years of experience' },
-    zeroline: false,
-    gridcolor: '#e2e8f0',
-  },
-  xaxis: {
-    automargin: true,
-    tickangle: -35,
-  },
-  height: 360,
-};
+function createBaseBoxLayout(font: Layout['font'], gridColor: string): Partial<Layout> {
+  return {
+    margin: { l: 60, r: 20, t: 40, b: 80 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    showlegend: false,
+    hovermode: 'closest',
+    font,
+    yaxis: {
+      title: { text: 'Min years of experience' },
+      zeroline: false,
+      gridcolor: gridColor,
+      range: [0, null],
+    },
+    xaxis: {
+      automargin: true,
+      tickangle: -35,
+    },
+    height: 360,
+  };
+}
 
-const baseHorizontalBarLayout: Partial<Layout> = {
-  margin: { l: 160, r: 20, t: 60, b: 40 },
-  paper_bgcolor: 'rgba(0,0,0,0)',
-  plot_bgcolor: 'rgba(0,0,0,0)',
-  font: baseFont,
-  xaxis: { gridcolor: '#e2e8f0' },
-  yaxis: { automargin: true, autorange: 'reversed' as const },
-};
+function createBaseHorizontalBarLayout(font: Layout['font'], gridColor: string): Partial<Layout> {
+  return {
+    margin: { l: 160, r: 20, t: 60, b: 40 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font,
+    xaxis: { gridcolor: gridColor },
+    yaxis: { automargin: true, autorange: 'reversed' as const },
+  };
+}
 
-const baseVerticalBarLayout: Partial<Layout> = {
-  margin: { l: 50, r: 20, t: 60, b: 80 },
-  paper_bgcolor: 'rgba(0,0,0,0)',
-  plot_bgcolor: 'rgba(0,0,0,0)',
-  font: baseFont,
-  xaxis: { automargin: true, tickangle: -35 },
-  yaxis: { gridcolor: '#e2e8f0', rangemode: 'tozero' },
-};
+function createBaseVerticalBarLayout(font: Layout['font'], gridColor: string): Partial<Layout> {
+  return {
+    margin: { l: 50, r: 20, t: 60, b: 80 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font,
+    xaxis: { automargin: true, tickangle: -35 },
+    yaxis: { gridcolor: gridColor, rangemode: 'tozero' },
+  };
+}
+
+function useChartVisuals() {
+  const theme = usePlotThemeContext();
+  const chartPalette = theme.chartPalette;
+  const beeswarmPalette = useMemo(() => chartPalette.filter((_, idx) => idx !== 0), [chartPalette]);
+  const baseFont = useMemo(
+    () => ({ family: 'Inter, system-ui, sans-serif', color: theme.baseFontColor }),
+    [theme.baseFontColor],
+  );
+  const baseBoxLayout = useMemo(() => createBaseBoxLayout(baseFont, theme.gridColor), [baseFont, theme.gridColor]);
+  const baseHorizontalBarLayout = useMemo(
+    () => createBaseHorizontalBarLayout(baseFont, theme.gridColor),
+    [baseFont, theme.gridColor],
+  );
+  const baseVerticalBarLayout = useMemo(
+    () => createBaseVerticalBarLayout(baseFont, theme.gridColor),
+    [baseFont, theme.gridColor],
+  );
+  const heatmapColorscale = useMemo(() => buildHeatmapColorscale(chartPalette), [chartPalette]);
+  const domainFill = chartPalette[5] ?? chartPalette[0];
+  const modalityFill = chartPalette[7] ?? chartPalette[2];
+  const degreeFill = chartPalette[4] ?? chartPalette[1];
+  const yoeFill = chartPalette[2] ?? chartPalette[0];
+
+  return {
+    chartPalette,
+    beeswarmPalette,
+    baseFont,
+    baseBoxLayout,
+    baseHorizontalBarLayout,
+    baseVerticalBarLayout,
+    heatmapColorscale,
+    domainFill,
+    modalityFill,
+    degreeFill,
+    yoeFill,
+    hoverLabelFontColor: theme.hoverLabelFontColor,
+    hoverLabelBgColor: theme.hoverLabelBgColor,
+    gridColor: theme.gridColor,
+  };
+}
 
 const MOBILE_MAX_WIDTH = 640;
 
@@ -90,7 +120,6 @@ function useCompactScreen(maxWidth = MOBILE_MAX_WIDTH) {
     }
     const query = window.matchMedia(`(max-width: ${maxWidth}px)`);
     const handleChange = (event: MediaQueryListEvent) => setIsCompact(event.matches);
-    setIsCompact(query.matches);
     if (typeof query.addEventListener === 'function') {
       query.addEventListener('change', handleChange);
       return () => query.removeEventListener('change', handleChange);
@@ -144,15 +173,11 @@ type MinYoeBoxPlotProps = {
   hoverLabelBg?: string;
 };
 
-export function MinYoeBoxPlot({
-  stats,
-  title,
-  color,
-  emptyMessage,
-  hoverLabelColor = hoverLabelFontColor,
-  hoverLabelBg = hoverLabelBgColor,
-}: MinYoeBoxPlotProps) {
+export function MinYoeBoxPlot({ stats, title, color, emptyMessage, hoverLabelColor, hoverLabelBg }: MinYoeBoxPlotProps) {
+  const { baseBoxLayout, hoverLabelFontColor, hoverLabelBgColor } = useChartVisuals();
   const isCompact = useCompactScreen();
+  const effectiveHoverLabelColor = hoverLabelColor ?? hoverLabelFontColor;
+  const effectiveHoverLabelBg = hoverLabelBg ?? hoverLabelBgColor;
   const plotData = useMemo<Data[]>(
     () =>
       stats.map((entry) => ({
@@ -162,9 +187,9 @@ export function MinYoeBoxPlot({
         boxpoints: 'suspectedoutliers' as const,
         marker: { color },
         hovertemplate: `<b>${entry.label}</b><br>Min YOE: %{y}<extra></extra>`,
-        hoverlabel: { font: { color: hoverLabelColor }, bgcolor: hoverLabelBg },
+        hoverlabel: { font: { color: effectiveHoverLabelColor }, bgcolor: effectiveHoverLabelBg },
       })),
-    [stats, color, hoverLabelColor, hoverLabelBg],
+    [stats, color, effectiveHoverLabelBg, effectiveHoverLabelColor],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -172,21 +197,22 @@ export function MinYoeBoxPlot({
       ...baseBoxLayout,
       margin: isCompact ? { l: 40, r: 12, t: 32, b: 60 } : baseBoxLayout.margin,
       height: isCompact ? 280 : baseBoxLayout.height,
+      yaxis: baseBoxLayout.yaxis,
     }),
-    [isCompact],
+    [baseBoxLayout, isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 360;
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+    <div className="surface-panel rounded-2xl p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">{title}</h3>
       </div>
       {plotData.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
       ) : (
-        <p className="text-sm text-slate-500">{emptyMessage}</p>
+        <p className="text-sm text-[var(--text-muted)]">{emptyMessage}</p>
       )}
     </div>
   );
@@ -204,6 +230,7 @@ export function DomainPopularityChart({
   height,
 }: DomainPopularityChartProps) {
   const isCompact = useCompactScreen();
+  const { baseHorizontalBarLayout, domainFill, hoverLabelFontColor, hoverLabelBgColor } = useChartVisuals();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -216,7 +243,7 @@ export function DomainPopularityChart({
         hoverlabel: { font: { color: hoverLabelFontColor }, bgcolor: hoverLabelBgColor },
       },
     ],
-    [domains],
+    [domainFill, domains, hoverLabelBgColor, hoverLabelFontColor],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -234,28 +261,25 @@ export function DomainPopularityChart({
         height: finalHeight,
       };
     },
-    [domains.length, height, isCompact],
+    [baseHorizontalBarLayout, domains.length, height, isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 360;
 
   return (
-    <div
-      className="flex h-full flex-col rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
-      style={{ minHeight: chartHeight }}
-    >
+    <div className="surface-panel flex h-full flex-col rounded-2xl p-4" style={{ minHeight: chartHeight }}>
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900">Domain Popularity</h3>
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">Domain Popularity</h3>
         </div>
-        <span className="text-xs font-semibold uppercase text-slate-600">{totalJobs} jobs</span>
+        <span className="text-xs font-semibold uppercase text-[var(--text-secondary)]">{totalJobs} jobs</span>
       </div>
       {domains.length > 0 ? (
         <div className="flex-1" style={{ minHeight: 0 }}>
           <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: '100%' }} />
         </div>
       ) : (
-        <p className="text-sm text-slate-500">No domains available yet.</p>
+        <p className="text-sm text-[var(--text-muted)]">No domains available yet.</p>
       )}
     </div>
   );
@@ -267,6 +291,7 @@ type ModalityPopularityChartProps = {
 
 export function ModalityPopularityChart({ modalities }: ModalityPopularityChartProps) {
   const isCompact = useCompactScreen();
+  const { baseVerticalBarLayout, modalityFill, hoverLabelFontColor, hoverLabelBgColor } = useChartVisuals();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -278,7 +303,7 @@ export function ModalityPopularityChart({ modalities }: ModalityPopularityChartP
         hoverlabel: { font: { color: hoverLabelFontColor }, bgcolor: hoverLabelBgColor },
       },
     ],
-    [modalities],
+    [hoverLabelBgColor, hoverLabelFontColor, modalities, modalityFill],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -291,20 +316,20 @@ export function ModalityPopularityChart({ modalities }: ModalityPopularityChartP
       },
       height: isCompact ? 260 : 320,
     }),
-    [isCompact],
+    [baseVerticalBarLayout, isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 320;
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+    <div className="surface-panel rounded-2xl p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">Modality Mix</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Modality Mix</h3>
       </div>
       {modalities.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
       ) : (
-        <p className="text-sm text-slate-500">No modality data available.</p>
+        <p className="text-sm text-[var(--text-muted)]">No modality data available.</p>
       )}
     </div>
   );
@@ -316,6 +341,7 @@ type DegreeRequirementsChartProps = {
 
 export function DegreeRequirementsChart({ degrees }: DegreeRequirementsChartProps) {
   const isCompact = useCompactScreen();
+  const { baseVerticalBarLayout, degreeFill, hoverLabelFontColor, hoverLabelBgColor } = useChartVisuals();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -327,7 +353,7 @@ export function DegreeRequirementsChart({ degrees }: DegreeRequirementsChartProp
         hoverlabel: { font: { color: hoverLabelFontColor }, bgcolor: hoverLabelBgColor },
       },
     ],
-    [degrees],
+    [degreeFill, degrees, hoverLabelBgColor, hoverLabelFontColor],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -340,20 +366,20 @@ export function DegreeRequirementsChart({ degrees }: DegreeRequirementsChartProp
       },
       height: isCompact ? 260 : 320,
     }),
-    [isCompact],
+    [baseVerticalBarLayout, isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 320;
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+    <div className="surface-panel rounded-2xl p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">Degree Requirements</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Degree Requirements</h3>
       </div>
       {degrees.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
       ) : (
-        <p className="text-sm text-slate-500">No degree data available.</p>
+        <p className="text-sm text-[var(--text-muted)]">No degree data available.</p>
       )}
     </div>
   );
@@ -366,6 +392,7 @@ type YoeDistributionChartProps = {
 
 export function YoeDistributionChart({ buckets, height }: YoeDistributionChartProps) {
   const isCompact = useCompactScreen();
+  const { baseVerticalBarLayout, yoeFill, hoverLabelFontColor, hoverLabelBgColor } = useChartVisuals();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -377,7 +404,7 @@ export function YoeDistributionChart({ buckets, height }: YoeDistributionChartPr
         hoverlabel: { font: { color: hoverLabelFontColor }, bgcolor: hoverLabelBgColor },
       },
     ],
-    [buckets],
+    [buckets, hoverLabelBgColor, hoverLabelFontColor, yoeFill],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -399,20 +426,20 @@ export function YoeDistributionChart({ buckets, height }: YoeDistributionChartPr
         },
       };
     },
-    [height, isCompact],
+    [baseVerticalBarLayout, height, isCompact],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 320;
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+    <div className="surface-panel rounded-2xl p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">YOE Distribution</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">YOE Distribution</h3>
       </div>
       {buckets.some((entry) => entry.count > 0) ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
       ) : (
-        <p className="text-sm text-slate-500">No experience data yet.</p>
+        <p className="text-sm text-[var(--text-muted)]">No experience data yet.</p>
       )}
     </div>
   );
@@ -420,6 +447,7 @@ export function YoeDistributionChart({ buckets, height }: YoeDistributionChartPr
 
 export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
   const isCompact = useCompactScreen();
+  const { beeswarmPalette, baseBoxLayout, hoverLabelFontColor, hoverLabelBgColor } = useChartVisuals();
   const { positions, labels, colorByLabel } = useMemo(() => {
     const uniqueLabels = Array.from(new Set(samples.map((sample) => sample.label)));
     const labelIndex = new Map(uniqueLabels.map((label, idx) => [label, idx]));
@@ -455,7 +483,7 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
     });
 
     return { positions, labels: uniqueLabels, colorByLabel: colorMap };
-  }, [samples]);
+  }, [beeswarmPalette, samples]);
 
   const plotData = useMemo<Data[]>(
     () => [
@@ -469,13 +497,12 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
           size: 7,
           opacity: 0.9,
           color: samples.map((sample) => colorByLabel.get(sample.label) ?? beeswarmPalette[0]),
-          line: { color: chartPalette[0], width: 0.5 },
         },
         hovertemplate: '<b>%{text}</b><br>Min YOE: %{y}<extra></extra>',
         hoverlabel: { font: { color: hoverLabelFontColor }, bgcolor: hoverLabelBgColor },
       },
     ],
-    [positions, samples],
+    [beeswarmPalette, colorByLabel, hoverLabelBgColor, hoverLabelFontColor, positions, samples],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -494,20 +521,20 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
         zeroline: false,
       },
     }),
-    [labels, isCompact],
+    [baseBoxLayout, isCompact, labels],
   );
 
   const chartHeight = (layout.height as number | undefined) ?? 360;
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+    <div className="surface-panel rounded-2xl p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">YOE Beeswarm By Language</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">YOE Beeswarm By Language</h3>
       </div>
       {samples.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
       ) : (
-        <p className="text-sm text-slate-500">No languages with min YOE yet.</p>
+        <p className="text-sm text-[var(--text-muted)]">No languages with min YOE yet.</p>
       )}
     </div>
   );
@@ -520,6 +547,7 @@ type DomainYoeHeatmapProps = {
 
 export function DomainYoeHeatmap({ data }: DomainYoeHeatmapProps) {
   const isCompact = useCompactScreen();
+  const { heatmapColorscale, baseFont, hoverLabelFontColor, hoverLabelBgColor } = useChartVisuals();
   const plotData = useMemo<Data[]>(
     () => [
       {
@@ -533,7 +561,7 @@ export function DomainYoeHeatmap({ data }: DomainYoeHeatmapProps) {
         hoverlabel: { font: { color: hoverLabelFontColor }, bgcolor: hoverLabelBgColor },
       },
     ],
-    [data],
+    [data, heatmapColorscale, hoverLabelBgColor, hoverLabelFontColor],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -557,18 +585,18 @@ export function DomainYoeHeatmap({ data }: DomainYoeHeatmapProps) {
         height: finalHeight,
       };
     },
-    [data.domains.length, isCompact],
+    [baseFont, data.domains.length, isCompact],
   );
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+    <div className="surface-panel rounded-2xl p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">YOE Heatmap By Domain</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">YOE Heatmap By Domain</h3>
       </div>
       {data.domains.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${layout.height as number}px` }} />
       ) : (
-        <p className="text-sm text-slate-500">Not enough YOE data to populate the heatmap.</p>
+        <p className="text-sm text-[var(--text-muted)]">Not enough YOE data to populate the heatmap.</p>
       )}
     </div>
   );
@@ -581,6 +609,7 @@ type DomainPopularityTrendChartProps = {
 
 export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTrendChartProps) {
   const isCompact = useCompactScreen();
+  const { chartPalette, baseFont, hoverLabelFontColor, hoverLabelBgColor, gridColor } = useChartVisuals();
   const MAX_TICKS = 10;
   const tickStep = Math.ceil(dates.length / MAX_TICKS);
   const tickDates = dates.filter((_, idx) => idx % tickStep === 0);
@@ -594,7 +623,7 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
       }
     });
     return map;
-  }, [series]);
+  }, [chartPalette, series]);
 
   const legendEntries = useMemo(() => {
     const seen = new Set<string>();
@@ -606,7 +635,7 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
       }
     });
     return entries;
-  }, [series, colorMap]);
+  }, [chartPalette, colorMap, series]);
 
   const plotData = useMemo<Data[]>(
     () =>
@@ -627,7 +656,7 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
           hoverlabel: { font: { color: hoverLabelFontColor }, bgcolor: hoverLabelBgColor },
         };
       }),
-    [series, colorMap],
+    [chartPalette, colorMap, hoverLabelBgColor, hoverLabelFontColor, series],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -643,25 +672,27 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
         tickangle: isCompact ? -15 : -30,
         showticklabels: !isCompact,
         ticks: isCompact ? '' : undefined,
+        gridcolor: gridColor,
+        showgrid: true,
       },
-      yaxis: { title: { text: 'Postings per day' }, rangemode: 'tozero' },
+      yaxis: { title: { text: 'Postings per day' }, rangemode: 'tozero', gridcolor: gridColor },
       showlegend: false,
       height: isCompact ? 300 : 360,
     }),
-    [isCompact, tickDates],
+    [baseFont, gridColor, isCompact, tickDates],
   );
 
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+    <div className="surface-panel rounded-2xl p-4">
       <div className="mb-3">
-        <h3 className="text-sm font-semibold text-slate-900">Domain Popularity Over Time</h3>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">Domain Popularity Over Time</h3>
       </div>
       {series.length > 0 ? (
         <>
           <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${layout.height as number}px` }} />
           {legendEntries.length > 0 && (
             <div className="mt-3 overflow-x-auto pb-1">
-              <div className="flex w-full min-w-full justify-center gap-4 text-xs font-semibold text-slate-600">
+              <div className="flex w-full min-w-full justify-center gap-4 text-xs font-semibold text-[var(--text-secondary)]">
                 <div className="flex min-w-max items-center gap-4">
                   {legendEntries.map((entry) => (
                     <span key={entry.domain} className="inline-flex items-center gap-2 whitespace-nowrap">
@@ -675,7 +706,7 @@ export function DomainPopularityTrendChart({ series, dates }: DomainPopularityTr
           )}
         </>
       ) : (
-        <p className="text-sm text-slate-500">Not enough daily data yet.</p>
+        <p className="text-sm text-[var(--text-muted)]">Not enough daily data yet.</p>
       )}
     </div>
   );

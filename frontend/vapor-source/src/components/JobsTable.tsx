@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Job } from '../types/job';
 
 declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     filterType?: 'text' | 'multi';
     options?: string[];
@@ -25,12 +26,12 @@ declare module '@tanstack/react-table' {
 }
 
 const columnHelper = createColumnHelper<Job>();
-const zebraRowColor = '#fefbfb';
-const pillTextColor = '#ffffff';
+const zebraRowColor = 'var(--table-row-zebra)';
+const pillTextColor = 'var(--pill-text)';
 const pillColors = {
-  modality: '#8c2f46',
-  language: '#1b4e5f',
-  domain: '#5b3374',
+  modality: 'var(--pill-modality-bg)',
+  language: 'var(--pill-language-bg)',
+  domain: 'var(--pill-domain-bg)',
 } as const;
 
 const DOMAIN_DISPLAY_ALIASES: Record<string, string> = {
@@ -73,7 +74,7 @@ type ClampedTextProps = {
 const ClampedText = ({
   text,
   lines = 2,
-  className = 'text-slate-700',
+  className = 'text-[var(--text-primary)]',
   fallback = '—',
 }: ClampedTextProps) => {
   const value = text && text.trim().length ? text : fallback;
@@ -178,28 +179,28 @@ function FilterModal({ title, options, selected, onApply, onClose }: FilterModal
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--modal-overlay)] px-4">
+      <div className="w-full max-w-md rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-background)] p-5 shadow-[var(--surface-shadow)]">
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-base font-semibold text-[var(--text-primary)]">{title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-full p-1 text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)]"
             aria-label="Close"
           >
             ×
           </button>
         </div>
-        <div className="mt-4 max-h-64 overflow-y-auto pr-1 text-sm text-slate-700">
-          {options.length === 0 && <p className="text-slate-500">No available values.</p>}
+        <div className="mt-4 max-h-64 overflow-y-auto pr-1 text-sm text-[var(--text-primary)]">
+          {options.length === 0 && <p className="text-[var(--text-primary)]/80">No available values.</p>}
           {options.map((option) => (
             <label key={option} className="mb-2 flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={localSelections.includes(option)}
                 onChange={() => toggleSelection(option)}
-                className="h-4 w-4 rounded border-slate-300 text-[#56949f] focus:ring-[#56949f]"
+                className="h-4 w-4 rounded border-[var(--surface-border)] text-[var(--accent-primary)] focus:ring-[var(--accent-primary)]"
               />
               <span>{option}</span>
             </label>
@@ -209,7 +210,7 @@ function FilterModal({ title, options, selected, onApply, onClose }: FilterModal
           <button
             type="button"
             onClick={() => setLocalSelections([])}
-            className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+            className="rounded-md border border-[var(--surface-border)] px-3 py-2 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)]"
           >
             Clear
           </button>
@@ -217,7 +218,7 @@ function FilterModal({ title, options, selected, onApply, onClose }: FilterModal
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+              className="rounded-md border border-[var(--surface-border)] px-3 py-2 text-sm font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)]"
             >
               Cancel
             </button>
@@ -227,7 +228,7 @@ function FilterModal({ title, options, selected, onApply, onClose }: FilterModal
                 onApply(localSelections);
                 onClose();
               }}
-              className="rounded-md bg-[#56949f] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#56949f]/90"
+              className="rounded-md bg-[var(--accent-primary)] px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90"
             >
               Apply
             </button>
@@ -281,7 +282,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
     };
   }, [jobs]);
 
-  const columns = useMemo<ColumnDef<Job, any>[]>(() => {
+  const columns = useMemo<ColumnDef<Job, unknown>[]>(() => {
     return [
       columnHelper.accessor('postedDate', {
         header: 'Posted',
@@ -298,13 +299,13 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
                 href={job.url}
                 target="_blank"
                 rel="noreferrer"
-                className="font-semibold text-slate-900 underline decoration-slate-300 underline-offset-2 transition hover:text-sky-600 hover:decoration-sky-500"
+                className="font-semibold text-[var(--text-primary)] underline decoration-[var(--text-muted)] underline-offset-2 transition hover:text-[var(--accent-primary)] hover:decoration-[var(--accent-primary)]"
                 style={lineClampStyle(3)}
                 title={info.getValue() ?? ''}
               >
                 {info.getValue()}
               </a>
-              <ClampedText className="text-sm text-slate-500" lines={1} text={job.company} />
+              <ClampedText className="text-sm text-[var(--text-secondary)]" lines={1} text={job.company} />
             </div>
           );
         },
@@ -338,7 +339,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
         meta: { filterType: 'multi', options: filterOptions.languages, title: 'Languages' },
         cell: (info) => {
           const langs = (info.getValue() ?? []) as string[];
-          if (!langs.length) return <span className="text-slate-400">—</span>;
+          if (!langs.length) return <span className="text-[var(--text-primary)]/80">—</span>;
           return (
             <div className="flex flex-wrap gap-1">
               {langs.map((lang: string, idx: number) => (
@@ -390,12 +391,13 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
         enableColumnFilter: false,
         enableSorting: false,
         cell: (info) => {
-          return <ClampedText text={info.getValue() ?? ''} lines={3} className="text-slate-600" />;
+          return <ClampedText text={info.getValue() ?? ''} lines={3} className="text-[var(--text-primary)]" />;
         },
       }),
     ];
   }, [filterOptions]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: jobs,
     columns,
@@ -448,7 +450,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
               return (
                 <label
                   key={control.id}
-                  className="flex flex-col items-center gap-1 text-center text-[11px] font-semibold uppercase text-slate-500"
+                  className="flex flex-col items-center gap-1 text-center text-[11px] font-semibold uppercase text-[var(--text-primary)]"
                 >
                   <span>{control.label}</span>
                   <input
@@ -466,7 +468,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
                       column.setFilterValue(sanitizedValue);
                     }}
                     placeholder={control.placeholder}
-                    className="w-28 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 placeholder:text-slate-400 focus:border-[#56949f] focus:outline-none focus:ring-1 focus:ring-[#56949f]/40"
+                    className="w-28 rounded-md border border-[var(--surface-border)] px-2 py-1 text-xs font-medium text-[var(--text-primary)] placeholder:text-[var(--text-primary)]/70 focus:border-[var(--accent-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]/40"
                   />
                 </label>
               );
@@ -480,17 +482,17 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
               return (
                 <label
                   key={filter.id}
-                  className="flex flex-col items-center gap-1 text-center text-[11px] font-semibold uppercase text-slate-500"
+                  className="flex flex-col items-center gap-1 text-center text-[11px] font-semibold uppercase text-[var(--text-primary)]"
                 >
                   <span>{filter.label}</span>
                   <button
                     type="button"
                     onClick={() => setActiveFilterColumnId(filter.id)}
-                    className="flex w-28 items-center justify-between rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800"
+                    className="flex w-28 items-center justify-between rounded-md border border-[var(--surface-border)] bg-[var(--surface-background)] px-2 py-1 text-xs font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)]"
                   >
                     <span>Select…</span>
                     {selections.length > 0 && (
-                      <span className="text-[11px] text-slate-400">({selections.length})</span>
+                      <span className="text-[11px] text-[var(--text-primary)]/70">({selections.length})</span>
                     )}
                   </button>
                 </label>
@@ -503,7 +505,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
               table.resetColumnFilters();
               setActiveFilterColumnId(undefined);
             }}
-            className="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-800 disabled:opacity-50"
+            className="rounded-md border border-[var(--surface-border)] bg-[var(--surface-background)] px-3 py-1 text-xs font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)] disabled:opacity-50"
             disabled={!hasActiveFilters}
           >
             Reset filters
@@ -516,24 +518,24 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
                 key={chip.id}
                 type="button"
                 onClick={chip.clear}
-                className="inline-flex items-center gap-1 rounded-full border border-[#56949f]/30 bg-[#56949f]/10 px-3 py-1 text-xs font-semibold text-[#56949f] shadow-sm transition hover:border-[#56949f]/50 hover:text-[#56949f]"
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--chip-border)] bg-[var(--chip-bg)] px-3 py-1 text-xs font-semibold text-[var(--chip-text)] shadow-sm transition hover:border-[var(--chip-hover-border)]"
               >
                 <span>{chip.label}</span>
-                <span className="text-[#56949f]">×</span>
+                <span className="text-[var(--chip-text)]">×</span>
               </button>
             ))}
           </div>
         )}
-        <div className="overflow-hidden rounded-2xl border border-slate-100">
+        <div className="overflow-hidden rounded-2xl border border-[var(--surface-border)]">
           <div className="overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-0 text-sm text-slate-700">
+            <table className="min-w-full border-separate border-spacing-0 text-sm text-[var(--text-primary)]">
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <tr key={headerGroup.id} style={{ backgroundColor: zebraRowColor }}>
                     {headerGroup.headers.map((header) => (
                       <th
                         key={header.id}
-                        className="border-b border-slate-200 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                        className="border-b border-[var(--surface-border)] px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-primary)]"
                       >
                         {header.isPlaceholder ? null : (
                           <button
@@ -557,7 +559,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
                 {table.getRowModel().rows.map((row, rowIdx) => (
                   <tr key={row.id} style={rowIdx % 2 === 0 ? undefined : { backgroundColor: zebraRowColor }}>
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-3 py-3 align-top text-slate-700">
+                      <td key={cell.id} className="px-3 py-3 align-top text-[var(--text-primary)]">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
@@ -566,17 +568,17 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
               </tbody>
             </table>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--surface-border)] px-4 py-3 text-sm text-[var(--text-primary)]">
             <span>
               Page {table.getState().pagination.pageIndex + 1} of {Math.max(table.getPageCount(), 1)}
             </span>
             <div className="flex flex-wrap items-center gap-4">
-              <label className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+              <label className="flex items-center gap-2 text-xs font-semibold uppercase text-[var(--text-primary)]">
                 Rows per page
                 <select
                   value={table.getState().pagination.pageSize}
                   onChange={(event) => table.setPageSize(Number(event.target.value))}
-                  className="rounded-md border border-slate-200 px-2 py-1 text-sm font-medium text-slate-600 transition focus:border-[#56949f] focus:outline-none focus:ring-1 focus:ring-[#56949f]/40"
+                  className="rounded-md border border-[var(--surface-border)] px-2 py-1 text-sm font-medium text-[var(--text-primary)] transition focus:border-[var(--accent-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-primary)]/40"
                 >
                   {pageSizeOptions.map((size) => (
                     <option key={size} value={size}>
@@ -590,7 +592,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
                   type="button"
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
-                  className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium text-slate-600 transition enabled:hover:border-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+                  className="rounded-md border border-[var(--surface-border)] px-3 py-1 text-sm font-medium text-[var(--text-primary)] transition enabled:hover:bg-[var(--surface-muted)] disabled:opacity-50"
                 >
                   Previous
                 </button>
@@ -598,7 +600,7 @@ export function JobsTable({ jobs, pageSize = 25 }: JobsTableProps) {
                   type="button"
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
-                  className="rounded-md border border-slate-200 px-3 py-1 text-sm font-medium text-slate-600 transition enabled:hover:border-slate-300 enabled:hover:text-slate-800 disabled:opacity-50"
+                  className="rounded-md border border-[var(--surface-border)] px-3 py-1 text-sm font-medium text-[var(--text-primary)] transition enabled:hover:bg-[var(--surface-muted)] disabled:opacity-50"
                 >
                   Next
                 </button>

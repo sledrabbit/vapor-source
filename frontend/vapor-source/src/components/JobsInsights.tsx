@@ -15,14 +15,11 @@ import {
   type DomainTrendSeries,
   type LanguageSample,
 } from './InsightsCharts';
+import { PlotThemeProvider, usePlotThemeContext } from '../hooks/theme';
 
 type JobsInsightsProps = {
   jobs: Job[];
 };
-
-const insightsPalette = ['#f2e9e1', '#286983', '#797593', '#9893a5', '#907aa9', '#b4637a', '#d7827e', '#56949f', '#ea9d34'] as const;
-const primaryLanguageColor = insightsPalette[7];
-const primaryDomainColor = insightsPalette[4];
 
 const LANGUAGE_ALIAS_MAP: Record<string, string | null> = {
   html: null,
@@ -32,6 +29,11 @@ const LANGUAGE_ALIAS_MAP: Record<string, string | null> = {
   'java script': 'JavaScript',
   typescript: 'TypeScript',
   ts: 'TypeScript',
+  '.net': 'C#',
+  'dotnet': 'C#',
+  'dot net': 'C#',
+  '.net core': 'C#',
+  'c sharp': 'C#',
 };
 
 const PRIORITY_LANGUAGES = ['Swift', 'Kotlin', 'Dart'];
@@ -83,6 +85,17 @@ function normalizeModality(raw?: string | null) {
 }
 
 export function JobsInsights({ jobs }: JobsInsightsProps) {
+  return (
+    <PlotThemeProvider>
+      <JobsInsightsContent jobs={jobs} />
+    </PlotThemeProvider>
+  );
+}
+
+function JobsInsightsContent({ jobs }: JobsInsightsProps) {
+  const plotTheme = usePlotThemeContext();
+  const primaryLanguageColor = plotTheme.chartPalette[2] ?? plotTheme.chartPalette[1];
+  const primaryDomainColor = plotTheme.chartPalette[5] ?? plotTheme.chartPalette[2];
   const {
     languageBoxData,
     domainBoxData,
