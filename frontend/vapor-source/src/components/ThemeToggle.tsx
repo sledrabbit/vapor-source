@@ -1,12 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type ThemeMode = 'light' | 'dark';
 
 const STORAGE_KEY = 'vapor-theme-mode';
-const THEME_LABEL: Record<ThemeMode, string> = {
-  light: 'Light',
-  dark: 'Dark',
-};
 
 const getSystemMode = (): ThemeMode => {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -17,6 +13,8 @@ const getSystemMode = (): ThemeMode => {
 
 export function ThemeToggle() {
   const [systemMode, setSystemMode] = useState<ThemeMode>(() => getSystemMode());
+  const [isSwitching, setIsSwitching] = useState(false);
+  const transitionTimeoutRef = useRef<number | null>(null);
   const [locked, setLocked] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -73,7 +71,22 @@ export function ThemeToggle() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (transitionTimeoutRef.current !== null) {
+        window.clearTimeout(transitionTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleToggle = useCallback(() => {
+    setIsSwitching(true);
+    if (transitionTimeoutRef.current !== null) {
+      window.clearTimeout(transitionTimeoutRef.current);
+    }
+    transitionTimeoutRef.current = window.setTimeout(() => {
+      setIsSwitching(false);
+    }, 200);
     setMode((current) => {
       const base = locked ? current : systemMode;
       const next = base === 'light' ? 'dark' : 'light';
@@ -88,23 +101,36 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={handleToggle}
-      className="inline-flex items-center gap-2 rounded-md bg-transparent px-3 py-1 text-xs font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)]"
+      className={`inline-flex items-center justify-center rounded-full bg-transparent p-3 text-[var(--text-secondary)] ${isSwitching ? 'transition-none' : 'transition'
+        } hover:bg-[var(--surface-muted)]`}
       aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
       title={`Switch to ${isDark ? 'light' : 'dark'} mode`}
     >
       <span className="sr-only">Toggle theme</span>
-      <span
-        className={`relative inline-flex h-5 w-10 items-center rounded-full transition ${
-          isDark ? 'bg-slate-900' : 'bg-slate-300'
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-            isDark ? 'translate-x-5' : 'translate-x-1'
-          }`}
-        />
+      <span className="h-7 w-7 text-[var(--text-secondary)]" aria-hidden="true">
+        {isDark ? (
+          // sun svg
+          <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <circle cx="12" cy="12" r="5" />
+            <path
+              d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        ) : (
+          // moon svg
+          <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <g transform="translate(12 12) scale(0.9) translate(-12 -12)">
+              <path
+                d="M12 3a6 6 0 1 0 9 9 9 9 0 1 1-9-9Z"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </g>
+          </svg>
+        )}
       </span>
-      <span>{THEME_LABEL[mode]}</span>
     </button>
   );
 }

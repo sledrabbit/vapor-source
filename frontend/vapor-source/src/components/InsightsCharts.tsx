@@ -31,7 +31,6 @@ function createBaseBoxLayout(font: Layout['font'], gridColor: string): Partial<L
       title: { text: 'Min years of experience' },
       zeroline: false,
       gridcolor: gridColor,
-      range: [0, null],
     },
     xaxis: {
       automargin: true,

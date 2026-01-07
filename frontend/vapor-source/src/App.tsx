@@ -19,17 +19,17 @@ function App() {
       style={{ background: 'var(--background-app)' }}
     >
       <section className="surface-card mx-auto w-full max-w-6xl rounded-2xl p-8">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-secondary)]">Vapor Source</p>
-            <h1 className="mt-3 text-3xl font-semibold text-[var(--text-primary)] sm:text-4xl">SWE Job Analytics</h1>
+            <ThemeToggle />
+          </div>
+          <div>
+            <h1 className="text-3xl font-semibold text-[var(--text-primary)] sm:text-4xl">SWE Job Analytics</h1>
             <p className="mt-3 max-w-3xl text-base text-[var(--text-secondary)]">
               Vapor Source ingests WorkSource postings and intelligently parses descriptions to determine
               the minimum years of experience, software domain, work modality, and technology used for the role.
             </p>
-          </div>
-          <div className="flex justify-end md:justify-start">
-            <ThemeToggle />
           </div>
         </div>
       </section>
