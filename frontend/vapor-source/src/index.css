@@ -32,6 +32,11 @@
   --chip-hover-border: rgba(86, 148, 159, 0.5);
   --chip-bg: rgba(86, 148, 159, 0.1);
   --chip-text: #56949f;
+  --skeleton-card-bg: #ffffff;
+  --skeleton-card-border: #e2e8f0;
+  --skeleton-chart-bg: #f1f5f9;
+  --skeleton-line-bg: #e2e8f0;
+  --skeleton-shimmer: rgba(255, 255, 255, 0.6);
 
   --chart-grid-color: #e2e8f0;
   --chart-hover-label-font: #9893a5;
@@ -119,6 +124,11 @@
   --chip-hover-border: rgba(62, 143, 176, 0.7);
   --chip-bg: rgba(62, 143, 176, 0.15);
   --chip-text: #3e8fb0;
+  --skeleton-card-bg: #24283b;
+  --skeleton-card-border: #393552;
+  --skeleton-chart-bg: #2a273f;
+  --skeleton-line-bg: rgba(226, 232, 240, 0.18);
+  --skeleton-shimmer: rgba(226, 232, 240, 0.18);
 
   --chart-grid-color: #393552;
   --chart-hover-label-font: #e0def4;
@@ -157,6 +167,11 @@
     --chip-hover-border: rgba(62, 143, 176, 0.7);
     --chip-bg: rgba(62, 143, 176, 0.15);
     --chip-text: #3e8fb0;
+    --skeleton-card-bg: #24283b;
+    --skeleton-card-border: #393552;
+    --skeleton-chart-bg: #2a273f;
+    --skeleton-line-bg: rgba(226, 232, 240, 0.18);
+    --skeleton-shimmer: rgba(226, 232, 240, 0.18);
 
     --chart-grid-color: #393552;
     --chart-hover-label-font: #e0def4;
