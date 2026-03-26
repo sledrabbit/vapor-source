@@ -9,17 +9,26 @@ struct JobProcessor {
 
   func run(jobStream: AsyncStream<Job>) async {
     let workerLimit = max(1, config.parserMaxConcurrentTasks)
-    let limiter = ConcurrencyLimiter(limit: workerLimit)
 
     await withTaskGroup(of: Void.self) { group in
+      var inFlight = 0
+
       for await job in jobStream {
-        await limiter.wait()
+        if inFlight >= workerLimit {
+          await group.next()
+          inFlight -= 1
+        }
+
+        inFlight += 1
         group.addTask {
-          defer { Task { await limiter.signal() } }
           await process(job)
         }
       }
-      await group.waitForAll()
+
+      while inFlight > 0 {
+        await group.next()
+        inFlight -= 1
+      }
     }
   }
 

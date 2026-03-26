@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.3
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -9,10 +9,10 @@ let package = Package(
     .macOS(.v15)
   ],
   dependencies: [
-    .package(url: "https://github.com/awslabs/swift-aws-lambda-runtime.git", from: "2.4.0"),
-    .package(url: "https://github.com/swift-server/swift-aws-lambda-events.git", from: "1.2.1"),
-    .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.11.1"),
-    .package(url: "https://github.com/awslabs/aws-sdk-swift.git", from: "1.6.3"),
+    .package(url: "https://github.com/awslabs/swift-aws-lambda-runtime.git", from: "2.8.0"),
+    .package(url: "https://github.com/swift-server/swift-aws-lambda-events.git", from: "1.5.0"),
+    .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.13.3"),
+    .package(url: "https://github.com/awslabs/aws-sdk-swift.git", from: "1.6.82"),
   ],
   targets: [
     // Targets are the basic building blocks of a package, defining a module or a test suite.
