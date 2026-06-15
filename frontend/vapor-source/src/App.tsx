@@ -5,13 +5,14 @@ import { InsightsSkeleton } from './components/InsightsSkeleton';
 import { ThemeToggle } from './components/ThemeToggle';
 
 const DEFAULT_PAGE_SIZE = 10;
+const SNAPSHOT_WINDOW_DAYS = 60;
 
 const JobsInsights = lazy(() =>
   import('./components/JobsInsights').then((module) => ({ default: module.JobsInsights })),
 );
 
 function App() {
-  const { jobs, loading, error } = useJobsSnapshot(DEFAULT_PAGE_SIZE);
+  const { jobs, loading, error } = useJobsSnapshot(DEFAULT_PAGE_SIZE, SNAPSHOT_WINDOW_DAYS);
 
   return (
     <main
@@ -30,6 +31,13 @@ function App() {
               Vapor Source ingests WorkSource postings and intelligently parses descriptions to determine
               the minimum years of experience, software domain, work modality, and technology used for the role.
             </p>
+            <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">WorkSource Site Update in Progress</p>
+              <p className="mt-1">
+                worksourcewa.com has been under construction since June 4 and Vapor Source will be updated to support
+                the new site soon. Job links before June 4 are currently broken.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -37,7 +45,9 @@ function App() {
       <section className="surface-card mx-auto mt-6 w-full max-w-6xl rounded-2xl p-6 sm:p-8">
         <div className="flex flex-col gap-1">
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">Snapshot Insights</h2>
-          <p className="text-sm text-[var(--text-muted)]">Aggregated analytics from the most recent 30-day snapshot window.</p>
+          <p className="text-sm text-[var(--text-muted)]">
+            Aggregated analytics from the most recent {SNAPSHOT_WINDOW_DAYS}-day snapshot window.
+          </p>
         </div>
         <div className="mt-5">
           {loading && <InsightsSkeleton />}
