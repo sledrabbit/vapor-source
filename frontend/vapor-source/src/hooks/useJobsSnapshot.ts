@@ -38,15 +38,19 @@ function parseSnapshotDate(dateStr: string) {
   return new Date(`${dateStr}T00:00:00Z`);
 }
 
-function getWindowDates(days: number) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+function getWindowDates(days: number, windowEndDate?: string) {
+  const today = windowEndDate ? parseSnapshotDate(windowEndDate) : new Date();
+  if (!windowEndDate) today.setHours(0, 0, 0, 0);
   const cutoff = new Date(today);
-  cutoff.setDate(today.getDate() - days);
+  if (windowEndDate) {
+    cutoff.setUTCDate(today.getUTCDate() - days);
+  } else {
+    cutoff.setDate(today.getDate() - days);
+  }
   return { today, cutoff };
 }
 
-export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
+export function useJobsSnapshot(targetCount = 10, backgroundDays = 30, windowEndDate?: string) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState<string>();
   const [loadingLatest, setLoadingLatest] = useState(true);
@@ -74,16 +78,19 @@ export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
         }
 
         setAvailableDays(manifestEntries.length);
-        const { today, cutoff } = getWindowDates(backgroundDays);
+        const { today, cutoff } = getWindowDates(backgroundDays, windowEndDate);
 
         const entriesInWindow: SnapshotManifestEntry[] = [];
         for (const entry of manifestEntries) {
           const entryDate = parseSnapshotDate(entry.date);
+          if (windowEndDate && entryDate > today) continue;
+          if (windowEndDate && entryDate < cutoff) break;
           if (entryDate < cutoff && entriesInWindow.length > 0) break;
           entriesInWindow.push(entry);
         }
 
-        const entriesToFetch = entriesInWindow.length > 0 ? entriesInWindow : manifestEntries.slice(0, backgroundDays);
+        const entriesToFetch =
+          entriesInWindow.length > 0 || windowEndDate ? entriesInWindow : manifestEntries.slice(0, backgroundDays);
 
         const aggregated: Job[] = [];
         let maxDaysCovered = 0;
@@ -191,7 +198,7 @@ export function useJobsSnapshot(targetCount = 10, backgroundDays = 30) {
 
     load();
     return () => controller.abort();
-  }, [backgroundDays, targetCount]);
+  }, [backgroundDays, targetCount, windowEndDate]);
 
   const latest = useMemo(() => jobs.slice(0, targetCount), [jobs, targetCount]);
 
