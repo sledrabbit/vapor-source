@@ -1,9 +1,15 @@
 package services
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"html"
+	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -13,9 +19,15 @@ import (
 	"gopher-source/config"
 	"gopher-source/models"
 	"gopher-source/utils"
-
-	"github.com/gocolly/colly/v2"
 )
+
+const (
+	workSourceApexEndpoint = "https://worksource.my.site.com/worksourcewa/webruntime/api/apex/execute?language=en-US&asGuest=true&htmlEncode=false"
+	workSourceApexClass    = "WswaJobSearchResultsController"
+	defaultSearchBatchSize = 100
+)
+
+var jobHTMLTagPattern = regexp.MustCompile(`<[^>]+>`)
 
 type ScraperClient interface {
 	ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job, stats *models.JobStats)
@@ -27,238 +39,308 @@ type scraperClientImpl struct {
 	debugEnabled bool
 	processedIDs map[string]bool
 	mutex        sync.Mutex
+	httpClient   *http.Client
+	apexEndpoint string
+}
+
+type scraperApexRequest struct {
+	Namespace      string `json:"namespace"`
+	Classname      string `json:"classname"`
+	Method         string `json:"method"`
+	IsContinuation bool   `json:"isContinuation"`
+	Params         any    `json:"params"`
+	Cacheable      bool   `json:"cacheable"`
+}
+
+type scraperApexResponse[T any] struct {
+	ReturnValue T `json:"returnValue"`
+}
+
+type workSourceSearchResponse struct {
+	Jobs              []workSourceJob `json:"jobs"`
+	TotalCount        int             `json:"totalCount"`
+	LoadMoreBatchSize int             `json:"loadMoreBatchSize"`
+	Filters           json.RawMessage `json:"filters"`
+	FilterMap         json.RawMessage `json:"filterMap"`
+	GeoWrapper        json.RawMessage `json:"geoWrapper"`
+	LastRecordID      string          `json:"lastRecordId"`
+	LastPostingDate   string          `json:"lastPostingDate"`
+}
+
+type workSourceJob struct {
+	RecordID     string `json:"recordId"`
+	JobTitle     string `json:"jobTitle"`
+	CompanyName  string `json:"companyName"`
+	JobLocation  string `json:"jobLocation"`
+	LocationType string `json:"locationType"`
+	PostingDate  string `json:"postingDate"`
+	ClosingDate  string `json:"closingDate"`
+	Amount       string `json:"amount"`
+	PayType      string `json:"payType"`
+	Description  string `json:"description"`
 }
 
 func NewScraper(config config.Config, debugEnabled bool) ScraperClient {
-	return &scraperClientImpl{
-		config:       config,
-		debugEnabled: debugEnabled,
-		processedIDs: make(map[string]bool),
-	}
+	return newScraper(config, debugEnabled, make(map[string]bool))
 }
 
 func NewScraperWithKeyset(config config.Config, debugEnabled bool, existingKeySet map[string]bool) ScraperClient {
+	return newScraper(config, debugEnabled, existingKeySet)
+}
+
+func newScraper(cfg config.Config, debugEnabled bool, processedIDs map[string]bool) ScraperClient {
+	if processedIDs == nil {
+		processedIDs = make(map[string]bool)
+	}
 	return &scraperClientImpl{
-		config:       config,
+		config:       cfg,
 		debugEnabled: debugEnabled,
-		processedIDs: existingKeySet,
+		processedIDs: processedIDs,
+		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		apexEndpoint: workSourceApexEndpoint,
 	}
 }
 
 func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job, stats *models.JobStats) {
 	defer close(jobsChan)
 
-	// create two collectors: one for search results, one for job details
-	resultsCollector := colly.NewCollector(
-		colly.AllowedDomains("seeker.worksourcewa.com", "worksourcewa.com"),
-		colly.UserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"),
-	)
-
-	// clone collector for parallel job detail scraping
-	detailsCollector := resultsCollector.Clone()
-	detailsCollector.Async = true
-	detailsCollector.Limit(&colly.LimitRule{
-		DomainGlob:  "*",
-		Parallelism: 25,
-	})
-
-	currentPage := 1
-	var pendingJobs sync.WaitGroup
-
-	// extract job links from search results pages
-	resultsCollector.OnHTML("h2.with-badge a", func(e *colly.HTMLElement) {
-		relativeURL := e.Attr("href")
-		absoluteURL := e.Request.AbsoluteURL(relativeURL)
-
-		jobIDRegex := regexp.MustCompile(`JobID=(\d+)`)
-		matches := jobIDRegex.FindStringSubmatch(absoluteURL)
-
-		if len(matches) < 2 {
+	listings, searchCalls, totalCount, err := s.searchJobs(ctx, query)
+	if err != nil {
+		log.Printf("Error searching WorkSourceWA: %v", err)
+		if len(listings) == 0 {
 			return
 		}
+	}
+	utils.Debug(fmt.Sprintf("WorkSourceWA returned %d of %d jobs in %d search call(s)", len(listings), totalCount, searchCalls))
 
-		jobID := matches[1]
+	for _, listing := range listings {
+		if ctx.Err() != nil {
+			return
+		}
+		if listing.RecordID == "" {
+			log.Printf("Skipping WorkSourceWA job without a recordId")
+			continue
+		}
 
-		// prevent processing duplicate jobs
 		s.mutex.Lock()
-		seen := s.processedIDs[jobID]
+		seen := s.processedIDs[listing.RecordID]
 		if !seen {
-			s.processedIDs[jobID] = true
+			s.processedIDs[listing.RecordID] = true
 		}
 		s.mutex.Unlock()
 
 		if seen {
-			utils.Debug(fmt.Sprintf("\tSkipping already processed job: %s", jobID))
+			utils.Debug(fmt.Sprintf("\tSkipping already processed job: %s", listing.RecordID))
 			if stats != nil {
 				atomic.AddInt64(&stats.SkippedJobs, 1)
 			}
-			return
+			continue
 		}
+
 		if stats != nil {
 			atomic.AddInt64(&stats.TotalJobs, 1)
 		}
+		job := listing.toJob()
+		select {
+		case jobsChan <- job:
+			utils.Debug(fmt.Sprintf("\tScraped job: %s", job.Title))
+		case <-ctx.Done():
+			return
+		}
+	}
+}
 
-		// queue job detail page for async processing
-		pendingJobs.Add(1)
-		go func(url string, jobID string) {
-			defer pendingJobs.Done()
-
-			err := detailsCollector.Visit(url)
-			if err != nil {
-				log.Printf("Error visiting job %s: %v", jobID, err)
-			}
-		}(absoluteURL, jobID)
+func (s *scraperClientImpl) searchJobs(ctx context.Context, query string) ([]workSourceJob, int, int, error) {
+	query = strings.TrimSpace(query)
+	response, err := callScraperApex[workSourceSearchResponse](ctx, s.httpClient, s.apexEndpoint, "initializeJobSearch", map[string]any{
+		"jobTitle":          query,
+		"location":          nil,
+		"companyId":         nil,
+		"industryId":        nil,
+		"currentLatitude":   nil,
+		"currentLongitude":  nil,
+		"additionalFilters": nil,
 	})
+	if err != nil {
+		return nil, 1, 0, err
+	}
 
-	// parse job details from individual job pages
-	detailsCollector.OnHTML("body", func(e *colly.HTMLElement) {
-		job := models.Job{
-			URL: e.Request.URL.String(),
-		}
+	jobs := append([]workSourceJob(nil), response.Jobs...)
+	totalCount := response.TotalCount
+	batchSize := response.LoadMoreBatchSize
+	if batchSize < 1 {
+		batchSize = defaultSearchBatchSize
+	}
+	filters := response.Filters
+	filterMap := response.FilterMap
+	geoWrapper := response.GeoWrapper
+	searchCalls := 1
+	maxPages := s.config.MaxPages
+	if maxPages < 1 {
+		maxPages = 1
+	}
 
-		jobIDRegex := regexp.MustCompile(`JobID=(\d+)`)
-		if matches := jobIDRegex.FindStringSubmatch(job.URL); len(matches) > 1 {
-			job.JobId = matches[1]
+	for searchCalls < maxPages && len(jobs) < totalCount {
+		if len(response.Jobs) == 0 || response.LastRecordID == "" || response.LastPostingDate == "" {
+			break
 		}
+		previousRecordID := response.LastRecordID
+		previousPostingDate := response.LastPostingDate
 
-		job.Title = e.ChildText("h1.margin-bottom")
-		if job.Title == "" {
-			job.Title = e.ChildText("h1.job-view-header")
+		response, err = callScraperApex[workSourceSearchResponse](ctx, s.httpClient, s.apexEndpoint, "loadMoreJobs", map[string]any{
+			"filters":         filters,
+			"filterMap":       filterMap,
+			"limitSize":       batchSize,
+			"lastRecordId":    response.LastRecordID,
+			"lastPostingDate": response.LastPostingDate,
+			"geoWrapper":      geoWrapper,
+		})
+		searchCalls++
+		if err != nil {
+			return jobs, searchCalls, totalCount, err
 		}
+		jobs = append(jobs, response.Jobs...)
+		if len(response.Jobs) == 0 || response.LastRecordID == previousRecordID && response.LastPostingDate == previousPostingDate {
+			break
+		}
+	}
 
-		job.Company = e.ChildText("h4 .capital-letter")
-		if job.Company == "" {
-			job.Company = e.ChildText("span.job-view-employer")
-		}
+	return jobs, searchCalls, totalCount, nil
+}
 
-		job.Location = e.ChildText("h4 small.wrappable")
-		if job.Location == "" {
-			job.Location = e.ChildText("span.job-view-location")
-		}
-
-		dateText := e.ChildText("p:contains('Posted:')")
-		if dateText != "" {
-			re := regexp.MustCompile(`Posted:\s*(.+?)\s*-`)
-			matches := re.FindStringSubmatch(dateText)
-			if len(matches) > 1 {
-				dateStr := strings.TrimSpace(matches[1])
-				if parsedDate, err := time.Parse("1/2/2006", dateStr); err == nil {
-					job.PostedDate = parsedDate.Format("2006-01-02")
-				} else {
-					job.PostedDate = dateStr
-				}
-			}
-		}
-		if job.PostedDate == "" {
-			job.PostedDate = e.ChildText("span.job-view-posting-date")
-		}
-
-		// extract expiry date from HTML content
-		reExpires := regexp.MustCompile(`Expires:\s*<strong>(.*?)</strong>`)
-		html, err := e.DOM.Html()
-		if err == nil {
-			if matches := reExpires.FindStringSubmatch(html); len(matches) > 1 {
-				job.ExpiresDate = strings.TrimSpace(matches[1])
-			}
-		}
-
-		job.Salary = e.ChildText("p.job-view-salary")
-		if job.Salary == "" {
-			e.ForEach("dl span", func(_ int, el *colly.HTMLElement) {
-				if strings.Contains(el.ChildText("dt"), "Salary") {
-					job.Salary = el.ChildText("dd")
-				}
-			})
-		}
-
-		// try multiple selectors for job description
-		for _, selector := range []string{
-			"span#TrackingJobBody",
-			"div.JobViewJobBody",
-			"div.job-view-description",
-			"div.directJobBody",
-			"#jobViewFrame",
-		} {
-			job.Description = e.ChildText(selector)
-			if job.Description != "" {
-				break
-			}
-		}
-
-		if job.Title == "" {
-			job.Title = "Unknown Title"
-		}
-		if job.Company == "" {
-			job.Company = "Unknown Company"
-		}
-		if job.Location == "" {
-			job.Location = "Unknown Location"
-		}
-		if job.Description == "" {
-			job.Description = "No description available"
-		}
-		if job.Salary == "" {
-			job.Salary = "Not specified"
-		}
-		if job.PostedDate == "" {
-			job.PostedDate = "Unknown Date"
-		}
-
-		jobsChan <- job
-		utils.Debug(fmt.Sprintf("\t📋 Scraped job: %s", job.Title))
+func callScraperApex[T any](ctx context.Context, client *http.Client, endpoint, method string, params any) (T, error) {
+	var zero T
+	payload, err := json.Marshal(scraperApexRequest{
+		Namespace:      "",
+		Classname:      workSourceApexClass,
+		Method:         method,
+		IsContinuation: false,
+		Params:         params,
+		Cacheable:      false,
 	})
+	if err != nil {
+		return zero, fmt.Errorf("encode %s request: %w", method, err)
+	}
 
-	// when results page is scraped, visit next page up to max limit
-	resultsCollector.OnScraped(func(r *colly.Response) {
-		utils.Debug(fmt.Sprintf("✅ Completed page %d", currentPage))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return zero, fmt.Errorf("create %s request: %w", method, err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("User-Agent", "vapor-source-scraper/2.0")
 
-		if currentPage < s.config.MaxPages {
-			currentPage++
-			time.Sleep(s.config.RequestDelay)
+	response, err := client.Do(request)
+	if err != nil {
+		return zero, fmt.Errorf("send %s request: %w", method, err)
+	}
+	defer response.Body.Close()
 
-			nextPageURL := s.buildURL(query, currentPage)
-			utils.Debug(fmt.Sprintf("📄 Moving to page %d: %s", currentPage, nextPageURL))
+	body, err := io.ReadAll(io.LimitReader(response.Body, 16<<20))
+	if err != nil {
+		return zero, fmt.Errorf("read %s response: %w", method, err)
+	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return zero, fmt.Errorf("%s returned HTTP %d: %s", method, response.StatusCode, truncateScraperResponse(string(body), 300))
+	}
 
-			resultsCollector.Visit(nextPageURL)
-		} else {
-			utils.Debug(fmt.Sprintf("⚠️ Reached maximum page limit (%d). Stopping.", s.config.MaxPages))
-		}
-	})
+	var envelope scraperApexResponse[T]
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return zero, fmt.Errorf("decode %s response: %w", method, err)
+	}
+	return envelope.ReturnValue, nil
+}
 
-	resultsCollector.OnError(func(r *colly.Response, err error) {
-		log.Printf("❌ Error on results page: %v", err)
-	})
+func (job workSourceJob) toJob() models.Job {
+	title := fallbackScraperValue(job.JobTitle, "Unknown Title")
+	company := fallbackScraperValue(job.CompanyName, "Unknown Company")
+	location := fallbackScraperValue(job.JobLocation, "Unknown Location")
+	description := plainTextJobDescription(job.Description)
+	if description == "" {
+		description = "No description available"
+	}
 
-	detailsCollector.OnError(func(r *colly.Response, err error) {
-		log.Printf("❌ Error on job detail page: %v", err)
-	})
-
-	// start scraping from the first page
-	startURL := s.buildURL(query, 1)
-	utils.Debug(fmt.Sprintf("📄 Starting from page 1: %s", startURL))
-	resultsCollector.Visit(startURL)
-
-	pendingJobs.Wait()
-	detailsCollector.Wait()
-
-	utils.Debug("🏁 Scraping complete.")
+	return models.Job{
+		JobId:       job.RecordID,
+		Title:       title,
+		Company:     company,
+		Location:    location,
+		Modality:    normalizeLocationType(job.LocationType),
+		PostedDate:  postingDateOnly(job.PostingDate),
+		ExpiresDate: job.ClosingDate,
+		PostedTime:  job.PostingDate,
+		Salary:      formatWorkSourcePay(job.Amount, job.PayType),
+		URL:         "https://worksource.my.site.com/worksourcewa/job-search/job-details?jobId=" + url.QueryEscape(job.RecordID),
+		Description: description,
+	}
 }
 
 func (s *scraperClientImpl) GetProcessedIDs() map[string]bool {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	res := make(map[string]bool, len(s.processedIDs))
+	result := make(map[string]bool, len(s.processedIDs))
 	for key := range s.processedIDs {
-		res[key] = true
+		result[key] = true
 	}
-	return res
+	return result
 }
 
-func (s *scraperClientImpl) buildURL(query string, page int) string {
-	trimQuery := strings.TrimSpace(query)
-	trimQuery = strings.ReplaceAll(trimQuery, " ", "+")
+func postingDateOnly(value string) string {
+	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+		return parsed.Format(time.DateOnly)
+	}
+	if len(value) >= len(time.DateOnly) {
+		return value[:len(time.DateOnly)]
+	}
+	return fallbackScraperValue(value, "Unknown Date")
+}
 
-	return fmt.Sprintf("%sjobsearch/powersearch.aspx?q=%s&rad_units=miles&pp=25&nosal=true&vw=b&setype=2&pg=%d&re=3",
-		s.config.BaseURL, trimQuery, page)
+func formatWorkSourcePay(amount, payType string) string {
+	amount = strings.TrimSpace(amount)
+	if amount == "" {
+		return "Not specified"
+	}
+	if !strings.HasPrefix(amount, "$") {
+		amount = "$" + amount
+	}
+	switch strings.ToLower(strings.TrimSpace(payType)) {
+	case "salary":
+		return amount + "/year"
+	case "hourly":
+		return amount + "/hour"
+	default:
+		return amount
+	}
+}
+
+func normalizeLocationType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "in person", "in-person", "onsite", "on-site":
+		return "In-Office"
+	case "hybrid":
+		return "Hybrid"
+	case "remote":
+		return "Remote"
+	default:
+		return ""
+	}
+}
+
+func plainTextJobDescription(value string) string {
+	withoutTags := jobHTMLTagPattern.ReplaceAllString(value, " ")
+	return strings.Join(strings.Fields(html.UnescapeString(withoutTags)), " ")
+}
+
+func fallbackScraperValue(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func truncateScraperResponse(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	return value[:limit] + "..."
 }

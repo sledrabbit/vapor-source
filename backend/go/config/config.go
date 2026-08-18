@@ -51,7 +51,7 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	query := getEnvOrDefault("QUERY", "software developer")
+	query := getEnvOrDefault("QUERY", "software engineer")
 	jobIDsPath := getEnvOrDefault("JOB_IDS_PATH", defaultJobIDsPath())
 
 	apiKey := strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))

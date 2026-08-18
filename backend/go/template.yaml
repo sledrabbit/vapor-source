@@ -5,7 +5,7 @@ Description: Job scraping Lambda built from backend/go/cmd/scraper.
 Parameters:
   Query:
     Type: String
-    Default: software developer
+    Default: software engineer
     Description: Search query passed to the scraper.
   DebugOutput:
     Type: String
