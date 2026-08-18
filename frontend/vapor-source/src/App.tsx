@@ -6,18 +6,13 @@ import { ThemeToggle } from './components/ThemeToggle';
 
 const DEFAULT_PAGE_SIZE = 10;
 const SNAPSHOT_WINDOW_DAYS = 60;
-const SNAPSHOT_WINDOW_END_DATE = '2026-06-02';
 
 const JobsInsights = lazy(() =>
   import('./components/JobsInsights').then((module) => ({ default: module.JobsInsights })),
 );
 
 function App() {
-  const { jobs, loading, error } = useJobsSnapshot(
-    DEFAULT_PAGE_SIZE,
-    SNAPSHOT_WINDOW_DAYS,
-    SNAPSHOT_WINDOW_END_DATE,
-  );
+  const { jobs, loading, error } = useJobsSnapshot(DEFAULT_PAGE_SIZE, SNAPSHOT_WINDOW_DAYS);
 
   return (
     <main
@@ -36,9 +31,6 @@ function App() {
               Vapor Source ingests WorkSource postings and intelligently parses descriptions to determine
               the minimum years of experience, software domain, work modality, and technology used for the role.
             </p>
-            <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <p>WorkSourceWA’s site redesign has temporarily paused Vapor Source updates; showing historical data through June 2, 2026. Job links currently broken.</p>
-            </div>
           </div>
         </div>
       </section>
@@ -47,7 +39,7 @@ function App() {
         <div className="flex flex-col gap-1">
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">Snapshot Insights</h2>
           <p className="text-sm text-[var(--text-muted)]">
-            Aggregated analytics from the {SNAPSHOT_WINDOW_DAYS}-day snapshot window ending June 2, 2026.
+            Aggregated analytics from the rolling {SNAPSHOT_WINDOW_DAYS}-day snapshot window.
           </p>
         </div>
         <div className="mt-5">

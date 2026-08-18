@@ -50,7 +50,7 @@ function getWindowDates(days: number, windowEndDate?: string) {
   return { today, cutoff };
 }
 
-export function useJobsSnapshot(targetCount = 10, backgroundDays = 30, windowEndDate?: string) {
+export function useJobsSnapshot(targetCount = 10, backgroundDays = 60, windowEndDate?: string) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState<string>();
   const [loadingLatest, setLoadingLatest] = useState(true);
