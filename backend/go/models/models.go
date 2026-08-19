@@ -21,7 +21,7 @@ type Job struct {
 	PostedTime                string   `json:"postedTime"`
 	Salary                    string   `json:"salary"`
 	URL                       string   `json:"url"`
-	MinYearsExperience        int      `json:"minYearsExperience,omitempty"`
+	MinYearsExperience        *int     `json:"minYearsExperience,omitempty"`
 	MinDegree                 string   `json:"minDegree,omitempty"`
 	Domain                    string   `json:"domain,omitempty"`
 	Description               string   `json:"description,omitempty"`
@@ -45,7 +45,7 @@ type OpenAIJobParsingResponse struct {
 	ParsedDescription         string   `json:"ParsedDescription" jsonschema_description:"A concise summary of the job role and key responsibilities"`
 	DeadlineDate              string   `json:"DeadlineDate" jsonschema_description:"Deadline or expiry date for the job posting. Use 'Ongoing until requisition is closed' if not specified"`
 	MinDegree                 string   `json:"MinDegree" jsonschema:"enum=Bachelor's,enum=Master's,enum=Ph.D,enum=Unspecified"`
-	MinYearsExperience        int      `json:"MinYearsExperience" jsonschema_description:"Minimum years of professional experience required. CRITICAL RULES: 1) If job title contains 'Senior' or 'Sr.' set to at least 4 years, 2) If job title contains 'Principal', 'Staff', 'Lead', or 'Director' set to at least 7 years, 3) If job title contains 'Mid-level' set to at least 2 years, 4) Otherwise extract specific years from description, 5) If no experience mentioned and no seniority keywords, set to 0,minimum=0,maximum=25"`
+	MinYearsExperience        *int     `json:"MinYearsExperience" jsonschema:"nullable,minimum=0,maximum=25" jsonschema_description:"Minimum years of professional software engineering experience required. CRITICAL RULES (priority order): 1) If the description states explicit years (e.g., '3+ years', '2-4 years'), extract the minimum required years (use lower bound). 2) If no explicit years are stated, use title-based minimums: 'Principal', 'Staff', 'Lead', or 'Director' => at least 7 years; 'Senior' or 'Sr.' => at least 4 years; 'Mid-level' => at least 2 years. 3) If the title or description identifies the role as 'Entry-level', 'Junior', 'New Grad', 'Intern', or 'Internship' and no explicit years are stated, set to 0. 4) If the posting provides no explicit experience requirement and has no reliable seniority classification, set to null. Do not guess 0 for an unknown requirement."`
 	Modality                  string   `json:"Modality" jsonschema:"enum=Remote,enum=Hybrid,enum=In-Office" jsonschema_description:"Work arrangement. Default to 'In-Office' if unclear"`
 	Domain                    string   `json:"Domain" jsonschema:"enum=Backend,enum=Full-Stack,enum=AI/ML,enum=Data,enum=QA,enum=Front-End,enum=Security,enum=DevOps,enum=Mobile,enum=Site Reliability,enum=Networking,enum=Embedded Systems,enum=Gaming,enum=Financial,enum=Other" jsonschema_description:"Technical domain. If description focuses on server-side or microservices development, choose 'Backend'"`
 	Languages                 []string `json:"Languages" jsonschema_description:"Programming languages mentioned in the job. Only include programming languages, not spoken languages like English or Spanish"`

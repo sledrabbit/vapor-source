@@ -97,7 +97,49 @@ func generateSchema[T any]() interface{} {
 	}
 	var v T
 	schema := reflector.Reflect(v)
+	normalizeNullableSchemas(schema)
 	return schema
+}
+
+// invopop/jsonschema represents nullable fields with oneOf, while OpenAI
+// Structured Outputs supports anyOf for unions. Convert nullable unions without
+// changing the schemas of their integer and null branches.
+func normalizeNullableSchemas(schema *jsonschema.Schema) {
+	if schema == nil {
+		return
+	}
+
+	if isNullableUnion(schema.OneOf) {
+		schema.AnyOf = schema.OneOf
+		schema.OneOf = nil
+	}
+
+	for _, child := range schema.OneOf {
+		normalizeNullableSchemas(child)
+	}
+	for _, child := range schema.AnyOf {
+		normalizeNullableSchemas(child)
+	}
+	if schema.Items != nil {
+		normalizeNullableSchemas(schema.Items)
+	}
+	if schema.Properties != nil {
+		for pair := schema.Properties.Oldest(); pair != nil; pair = pair.Next() {
+			normalizeNullableSchemas(pair.Value)
+		}
+	}
+	for _, definition := range schema.Definitions {
+		normalizeNullableSchemas(definition)
+	}
+}
+
+func isNullableUnion(schemas []*jsonschema.Schema) bool {
+	for _, schema := range schemas {
+		if schema != nil && schema.Type == "null" {
+			return true
+		}
+	}
+	return false
 }
 
 // generate the JSON schema at initialization time

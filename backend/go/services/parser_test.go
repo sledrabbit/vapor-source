@@ -33,6 +33,7 @@ func (f *fakeOpenAIClient) UnmarshalResponse(responseText string) (models.OpenAI
 }
 
 func TestParseWithStatsSuccess(t *testing.T) {
+	minYearsExperience := 5
 	client := &fakeOpenAIClient{
 		sendResp: openai.ChatCompletion{
 			Choices: []openai.ChatCompletionChoice{
@@ -49,7 +50,7 @@ func TestParseWithStatsSuccess(t *testing.T) {
 			ParsedDescription:         "parsed",
 			DeadlineDate:              "tomorrow",
 			MinDegree:                 "Bachelor's",
-			MinYearsExperience:        5,
+			MinYearsExperience:        &minYearsExperience,
 			Modality:                  "Remote",
 			Domain:                    "Backend",
 			Languages:                 []string{"Go"},
@@ -71,6 +72,26 @@ func TestParseWithStatsSuccess(t *testing.T) {
 	if enhanced.ParsedDescription != "parsed" || enhanced.Modality != "Remote" || enhanced.Description != "" {
 		t.Fatalf("expected job fields populated, got %+v", enhanced)
 	}
+}
+
+func TestPopulateJobFromResponsePreservesKnownZeroAndUnknown(t *testing.T) {
+	zero := 0
+
+	entryLevelJob := jobWithResponseMinYears(&zero)
+	if entryLevelJob.MinYearsExperience == nil || *entryLevelJob.MinYearsExperience != 0 {
+		t.Fatalf("expected known zero YOE to be preserved, got %v", entryLevelJob.MinYearsExperience)
+	}
+
+	unknownJob := jobWithResponseMinYears(nil)
+	if unknownJob.MinYearsExperience != nil {
+		t.Fatalf("expected unknown YOE to remain nil, got %v", *unknownJob.MinYearsExperience)
+	}
+}
+
+func jobWithResponseMinYears(minYears *int) models.Job {
+	job := models.Job{}
+	populateJobFromResponse(&job, models.OpenAIJobParsingResponse{MinYearsExperience: minYears})
+	return job
 }
 
 func TestParseWithStatsHandlesSendError(t *testing.T) {

@@ -186,7 +186,8 @@ func mockParse(job models.Job) {
 	enhancedJob := job
 	enhancedJob.ParsedDescription = fmt.Sprintf("Mock parsed description for %s", job.Title)
 	enhancedJob.MinDegree = "Bachelor's"
-	enhancedJob.MinYearsExperience = 3
+	minYearsExperience := 3
+	enhancedJob.MinYearsExperience = &minYearsExperience
 	enhancedJob.Modality = "Remote"
 	enhancedJob.Domain = "Software Development"
 	enhancedJob.Languages = []string{"Go", "Python"}
