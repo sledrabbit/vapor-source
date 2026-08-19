@@ -5,7 +5,7 @@ import { InsightsSkeleton } from './components/InsightsSkeleton';
 import { ThemeToggle } from './components/ThemeToggle';
 
 const DEFAULT_PAGE_SIZE = 10;
-const SNAPSHOT_WINDOW_DAYS = 60;
+const SNAPSHOT_WINDOW_DAYS = 30;
 
 const JobsInsights = lazy(() =>
   import('./components/JobsInsights').then((module) => ({ default: module.JobsInsights })),
@@ -40,6 +40,17 @@ function App() {
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">Snapshot Insights</h2>
           <p className="text-sm text-[var(--text-muted)]">
             Aggregated analytics from the rolling {SNAPSHOT_WINDOW_DAYS}-day snapshot window.
+            {!loading && !error && jobs.length > 0 && (
+              <>
+                {' '}
+                <a
+                  href="#job-listings"
+                  className="font-medium text-[var(--text-secondary)] underline decoration-[var(--surface-border)] underline-offset-4 transition hover:text-[var(--text-primary)] focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)]"
+                >
+                  Skip to job listings ↓
+                </a>
+              </>
+            )}
           </p>
         </div>
         <div className="mt-5">
@@ -61,7 +72,10 @@ function App() {
           )}
         </div>
       </section>
-      <section className="surface-card mx-auto mt-6 w-full max-w-6xl rounded-2xl p-6 sm:p-8">
+      <section
+        id="job-listings"
+        className="surface-card mx-auto mt-6 w-full max-w-6xl scroll-mt-6 rounded-2xl p-6 sm:p-8"
+      >
         <div className="flex flex-col gap-1">
           <h2 className="text-xl font-semibold text-[var(--text-primary)]">Job Listings</h2>
           <p className="text-sm text-[var(--text-muted)]">Newest entries pulled across snapshot files, sorted by posted date.</p>
