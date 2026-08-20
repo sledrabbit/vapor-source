@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/openai/openai-go"
@@ -12,13 +13,19 @@ import (
 )
 
 type fakeOpenAIClient struct {
-	sendResp     openai.ChatCompletion
-	sendErr      error
-	unmarshalRes models.OpenAIJobParsingResponse
-	unmarshalErr error
+	sendResp         openai.ChatCompletion
+	sendErr          error
+	sendCalls        int
+	messages         []string
+	unmarshalRes     models.OpenAIJobParsingResponse
+	unmarshalResults []models.OpenAIJobParsingResponse
+	unmarshalErr     error
+	unmarshalCalls   int
 }
 
 func (f *fakeOpenAIClient) SendMessage(ctx context.Context, message string) (openai.ChatCompletion, error) {
+	f.sendCalls++
+	f.messages = append(f.messages, message)
 	if f.sendErr != nil {
 		return openai.ChatCompletion{}, f.sendErr
 	}
@@ -29,6 +36,12 @@ func (f *fakeOpenAIClient) UnmarshalResponse(responseText string) (models.OpenAI
 	if f.unmarshalErr != nil {
 		return models.OpenAIJobParsingResponse{}, f.unmarshalErr
 	}
+	if f.unmarshalCalls < len(f.unmarshalResults) {
+		result := f.unmarshalResults[f.unmarshalCalls]
+		f.unmarshalCalls++
+		return result, nil
+	}
+	f.unmarshalCalls++
 	return f.unmarshalRes, nil
 }
 
@@ -85,6 +98,117 @@ func TestPopulateJobFromResponsePreservesKnownZeroAndUnknown(t *testing.T) {
 	unknownJob := jobWithResponseMinYears(nil)
 	if unknownJob.MinYearsExperience != nil {
 		t.Fatalf("expected unknown YOE to remain nil, got %v", *unknownJob.MinYearsExperience)
+	}
+}
+
+func TestParseWithStatsRetriesNullYOEWhenDescriptionContainsCue(t *testing.T) {
+	fiveYears := 5
+	client := &fakeOpenAIClient{
+		sendResp: successfulChatCompletion(),
+		unmarshalResults: []models.OpenAIJobParsingResponse{
+			{ParsedDescription: "first pass", IsSoftwareEngineerRelated: true},
+			{ParsedDescription: "retry", MinYearsExperience: &fiveYears, IsSoftwareEngineerRelated: true},
+		},
+	}
+	parser := NewParserService(client)
+
+	job, ok := parser.ParseWithStats(context.Background(), &models.Job{
+		JobId:       "yoe-retry",
+		Title:       "Backend Engineer",
+		Description: "Required qualifications include 5+ years of software engineering experience.",
+	})
+	if !ok || job == nil {
+		t.Fatalf("expected successful parse, got ok=%v job=%v", ok, job)
+	}
+	if client.sendCalls != 2 {
+		t.Fatalf("expected one YOE retry, got %d API calls", client.sendCalls)
+	}
+	if job.MinYearsExperience == nil || *job.MinYearsExperience != 5 {
+		t.Fatalf("expected retry YOE 5, got %v", job.MinYearsExperience)
+	}
+	if job.ParsedDescription != "first pass" {
+		t.Fatalf("expected retry to update only YOE, got parsed description %q", job.ParsedDescription)
+	}
+	if !strings.Contains(client.messages[1], yoeRetryInstruction) {
+		t.Fatalf("expected focused retry instruction, got %q", client.messages[1])
+	}
+}
+
+func TestParseWithStatsDoesNotRetryNullYOEWithoutCue(t *testing.T) {
+	client := &fakeOpenAIClient{
+		sendResp:     successfulChatCompletion(),
+		unmarshalRes: models.OpenAIJobParsingResponse{IsSoftwareEngineerRelated: true},
+	}
+	parser := NewParserService(client)
+
+	job, ok := parser.ParseWithStats(context.Background(), &models.Job{
+		JobId:       "no-yoe-retry",
+		Title:       "Backend Engineer",
+		Description: "Build and operate backend services.",
+	})
+	if !ok || job == nil {
+		t.Fatalf("expected successful parse, got ok=%v job=%v", ok, job)
+	}
+	if client.sendCalls != 1 {
+		t.Fatalf("expected no YOE retry, got %d API calls", client.sendCalls)
+	}
+}
+
+func TestContainsYOECue(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   bool
+	}{
+		{name: "numeric requirement", source: "Requires 3+ years of software engineering experience", want: true},
+		{name: "written range", source: "Three to five years of professional experience required", want: true},
+		{name: "ambiguous years mention gets adjudicated", source: "The company was founded 20 years ago", want: true},
+		{name: "no years", source: "Prior backend experience is preferred", want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := containsYOECue(test.source); got != test.want {
+				t.Fatalf("containsYOECue(%q) = %v, want %v", test.source, got, test.want)
+			}
+		})
+	}
+}
+
+func TestShouldRetryYOEOnlyForExplicitEvidence(t *testing.T) {
+	tests := []struct {
+		name        string
+		title       string
+		description string
+		want        bool
+	}{
+		{name: "numeric requirement", title: "Backend Engineer", description: "Requires 4 years of experience", want: true},
+		{name: "explicit zero", title: "Backend Engineer", description: "No prior experience is required", want: true},
+		{name: "explicit zero alternate wording", title: "Backend Engineer", description: "Professional experience is not required", want: true},
+		{name: "senior title only", title: "Senior Backend Engineer", description: "Build backend services", want: false},
+		{name: "entry title only", title: "Entry-Level Developer", description: "Build product features", want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			job := &models.Job{Title: test.title, Description: test.description}
+			if got := shouldRetryYOE(job); got != test.want {
+				t.Fatalf("shouldRetryYOE(%q, %q) = %v, want %v", test.title, test.description, got, test.want)
+			}
+		})
+	}
+}
+
+func successfulChatCompletion() openai.ChatCompletion {
+	return openai.ChatCompletion{
+		Choices: []openai.ChatCompletionChoice{
+			{
+				Message: openai.ChatCompletionMessage{
+					Content: "response",
+					Role:    constant.Assistant("assistant"),
+				},
+			},
+		},
 	}
 }
 

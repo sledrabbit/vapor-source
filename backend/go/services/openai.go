@@ -15,6 +15,18 @@ import (
 	"gopher-source/models"
 )
 
+const jobExtractionDeveloperInstruction = `You extract structured data from job postings. Read the entire title and description and prioritize extraction completeness.
+
+For MinYearsExperience:
+- Re-scan the complete source for explicit experience requirements before answering.
+- When a required number or range is present, return the minimum required years (for example, 3 for "3+ years" and 2 for "2-4 years"). Do not return null in this case.
+- Return 0 only when the source explicitly states that no prior professional experience is required.
+- Distinguish required qualifications from experience that is only preferred or nice to have.
+- Never infer a number from title or seniority labels such as Entry-level, Junior, Mid-level, Senior, Staff, Principal, Lead, Director, New Grad, or Intern.
+- Return null after confirming that the source contains no explicit minimum-years requirement and does not explicitly state that no prior experience is required.
+
+Follow the response schema exactly and do not add commentary.`
+
 type OpenAIClient interface {
 	SendMessage(ctx context.Context, message string) (openai.ChatCompletion, error)
 	UnmarshalResponse(responseText string) (models.OpenAIJobParsingResponse, error)
@@ -40,6 +52,7 @@ func (o *openaiClientImpl) SendMessage(ctx context.Context, message string) (ope
 	return o.executeWithRetry(ctx, func() (openai.ChatCompletion, error) {
 		chatCompletion, err := o.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.DeveloperMessage(jobExtractionDeveloperInstruction),
 				openai.UserMessage(message),
 			},
 			Model: openai.ChatModelGPT4_1Nano,
