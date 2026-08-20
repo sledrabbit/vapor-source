@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -89,13 +90,10 @@ func TestScrapeJobsPaginatesEmitsUniqueJobsAndUpdatesStats(t *testing.T) {
 	impl.httpClient = server.Client()
 	impl.apexEndpoint = server.URL
 
-	jobsChan := make(chan models.Job)
 	stats := &models.JobStats{}
-	go scraper.ScrapeJobs(context.Background(), "backend engineer", jobsChan, stats)
-
-	var jobs []models.Job
-	for job := range jobsChan {
-		jobs = append(jobs, job)
+	jobs, err := collectScrapedJobs(context.Background(), scraper, "backend engineer", stats)
+	if err != nil {
+		t.Fatalf("ScrapeJobs returned error: %v", err)
 	}
 
 	if fmt.Sprint(methods) != "[initializeJobSearch loadMoreJobs]" {
@@ -144,6 +142,99 @@ func TestScrapeJobsPaginatesEmitsUniqueJobsAndUpdatesStats(t *testing.T) {
 	if snapshot.SkippedJobs != 1 {
 		t.Fatalf("expected SkippedJobs=1, got %d", snapshot.SkippedJobs)
 	}
+}
+
+func TestScrapeJobsReturnsInitialApexHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	scraper := NewScraper(config.Config{MaxPages: 1}, false)
+	impl := scraper.(*scraperClientImpl)
+	impl.httpClient = server.Client()
+	impl.apexEndpoint = server.URL
+
+	jobs, err := collectScrapedJobs(context.Background(), scraper, "backend engineer", &models.JobStats{})
+	if err == nil || !strings.Contains(err.Error(), "initializeJobSearch returned HTTP 503") {
+		t.Fatalf("expected initial Apex HTTP error, got %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("expected no jobs, got %d", len(jobs))
+	}
+}
+
+func TestScrapeJobsEmitsEarlierJobsAndReturnsLaterApexHTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request scraperApexRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+
+		if request.Method == "initializeJobSearch" {
+			writeSearchResponse(t, w, workSourceSearchResponse{
+				Jobs:              []workSourceJob{{RecordID: "record-123", JobTitle: "Backend Engineer"}},
+				TotalCount:        2,
+				LoadMoreBatchSize: 100,
+				LastRecordID:      "record-123",
+				LastPostingDate:   "2026-08-18T01:40:56.000Z",
+			})
+			return
+		}
+
+		http.Error(w, "upstream failure", http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	scraper := NewScraper(config.Config{MaxPages: 2}, false)
+	impl := scraper.(*scraperClientImpl)
+	impl.httpClient = server.Client()
+	impl.apexEndpoint = server.URL
+
+	jobs, err := collectScrapedJobs(context.Background(), scraper, "backend engineer", &models.JobStats{})
+	if err == nil || !strings.Contains(err.Error(), "loadMoreJobs returned HTTP 502") {
+		t.Fatalf("expected later Apex HTTP error, got %v", err)
+	}
+	if len(jobs) != 1 || jobs[0].JobId != "record-123" {
+		t.Fatalf("expected earlier job to be emitted, got %+v", jobs)
+	}
+}
+
+func TestScrapeJobsReturnsContextCancellation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("canceled request should not reach server")
+	}))
+	defer server.Close()
+
+	scraper := NewScraper(config.Config{MaxPages: 1}, false)
+	impl := scraper.(*scraperClientImpl)
+	impl.httpClient = server.Client()
+	impl.apexEndpoint = server.URL
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	jobs, err := collectScrapedJobs(ctx, scraper, "backend engineer", &models.JobStats{})
+	if err == nil || !strings.Contains(err.Error(), context.Canceled.Error()) {
+		t.Fatalf("expected context cancellation, got %v", err)
+	}
+	if len(jobs) != 0 {
+		t.Fatalf("expected no jobs, got %d", len(jobs))
+	}
+}
+
+func collectScrapedJobs(ctx context.Context, scraper ScraperClient, query string, stats *models.JobStats) ([]models.Job, error) {
+	jobsChan := make(chan models.Job)
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- scraper.ScrapeJobs(ctx, query, jobsChan, stats)
+	}()
+
+	var jobs []models.Job
+	for job := range jobsChan {
+		jobs = append(jobs, job)
+	}
+	return jobs, <-errChan
 }
 
 func writeSearchResponse(t *testing.T, w http.ResponseWriter, response workSourceSearchResponse) {

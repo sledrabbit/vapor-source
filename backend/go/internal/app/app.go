@@ -90,7 +90,7 @@ func Run(ctx context.Context, cfg *config.Config) (*RunResult, error) {
 
 	// scrape
 	utils.Debug(fmt.Sprintf("🚀 Starting job scraping for '%s' with max pages set to %d", cfg.DefaultQuery, cfg.MaxPages))
-	scraper.ScrapeJobs(ctx, cfg.DefaultQuery, jobsChan, stats)
+	scrapeErr := scraper.ScrapeJobs(ctx, cfg.DefaultQuery, jobsChan, stats)
 	processingWg.Wait()
 
 	if cfg.UseJobIDFile {
@@ -125,6 +125,9 @@ func Run(ctx context.Context, cfg *config.Config) (*RunResult, error) {
 	result.ExecutionTime = executionTime
 	result.Stats = stats.Snapshot()
 
+	if scrapeErr != nil {
+		return result, fmt.Errorf("scrape jobs: %w", scrapeErr)
+	}
 	return result, nil
 }
 

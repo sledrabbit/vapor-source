@@ -30,7 +30,7 @@ const (
 var jobHTMLTagPattern = regexp.MustCompile(`<[^>]+>`)
 
 type ScraperClient interface {
-	ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job, stats *models.JobStats)
+	ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job, stats *models.JobStats) error
 	GetProcessedIDs() map[string]bool
 }
 
@@ -101,21 +101,21 @@ func newScraper(cfg config.Config, debugEnabled bool, processedIDs map[string]bo
 	}
 }
 
-func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job, stats *models.JobStats) {
+func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsChan chan<- models.Job, stats *models.JobStats) error {
 	defer close(jobsChan)
 
-	listings, searchCalls, totalCount, err := s.searchJobs(ctx, query)
-	if err != nil {
-		log.Printf("Error searching WorkSourceWA: %v", err)
+	listings, searchCalls, totalCount, searchErr := s.searchJobs(ctx, query)
+	if searchErr != nil {
+		log.Printf("Error searching WorkSourceWA: %v", searchErr)
 		if len(listings) == 0 {
-			return
+			return searchErr
 		}
 	}
 	utils.Debug(fmt.Sprintf("WorkSourceWA returned %d of %d jobs in %d search call(s)", len(listings), totalCount, searchCalls))
 
 	for _, listing := range listings {
-		if ctx.Err() != nil {
-			return
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if listing.RecordID == "" {
 			log.Printf("Skipping WorkSourceWA job without a recordId")
@@ -145,9 +145,11 @@ func (s *scraperClientImpl) ScrapeJobs(ctx context.Context, query string, jobsCh
 		case jobsChan <- job:
 			utils.Debug(fmt.Sprintf("\tScraped job: %s", job.Title))
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		}
 	}
+
+	return searchErr
 }
 
 func (s *scraperClientImpl) searchJobs(ctx context.Context, query string) ([]workSourceJob, int, int, error) {

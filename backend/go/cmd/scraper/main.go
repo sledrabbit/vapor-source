@@ -75,26 +75,10 @@ func handler(ctx context.Context, event Request) (Response, error) {
 
 	applyRequestOverrides(cfg, event.QueryStringParameters)
 
-	runResult, err := app.Run(ctx, cfg)
-	if err != nil {
-		return errorResponse(http.StatusInternalServerError, fmt.Errorf("run app: %w", err))
-	}
-	log.Printf("snapshot trigger evaluation: jobsAdded=%d cacheEnabled=%t snapshotLambdaSet=%t", runResult.JobsAddedToCache, runResult.JobCacheEnabled, cfg.SnapshotLambda != "")
-
-	switch {
-	case !runResult.JobCacheEnabled:
-		log.Printf("snapshot trigger skipped: job cache disabled")
-	case runResult.JobsAddedToCache <= 0:
-		log.Printf("snapshot trigger skipped: no new jobs added to cache")
-	case cfg.SnapshotLambda == "":
-		log.Printf("snapshot trigger skipped: SNAPSHOT_LAMBDA_FUNCTION_NAME not configured")
-	default:
-		log.Printf("invoking snapshot lambda %s after %d new jobs", cfg.SnapshotLambda, runResult.JobsAddedToCache)
-		if err := triggerSnapshotLambda(ctx, cfg); err != nil {
-			log.Printf("snapshot trigger failed: %v", err)
-		} else {
-			log.Printf("snapshot lambda invoked successfully")
-		}
+	runResult, runErr := app.Run(ctx, cfg)
+	evaluateSnapshotTrigger(ctx, cfg, runResult, triggerSnapshotLambda)
+	if runErr != nil {
+		return errorResponse(http.StatusInternalServerError, fmt.Errorf("run app: %w", runErr))
 	}
 	functionDuration := time.Since(start)
 
@@ -109,6 +93,34 @@ func handler(ctx context.Context, event Request) (Response, error) {
 	}
 
 	return jsonResponse(http.StatusOK, payload), nil
+}
+
+func evaluateSnapshotTrigger(
+	ctx context.Context,
+	cfg *config.Config,
+	runResult *app.RunResult,
+	trigger func(context.Context, *config.Config) error,
+) {
+	if runResult == nil {
+		return
+	}
+
+	log.Printf("snapshot trigger evaluation: jobsAdded=%d cacheEnabled=%t snapshotLambdaSet=%t", runResult.JobsAddedToCache, runResult.JobCacheEnabled, cfg.SnapshotLambda != "")
+	switch {
+	case !runResult.JobCacheEnabled:
+		log.Printf("snapshot trigger skipped: job cache disabled")
+	case runResult.JobsAddedToCache <= 0:
+		log.Printf("snapshot trigger skipped: no new jobs added to cache")
+	case cfg.SnapshotLambda == "":
+		log.Printf("snapshot trigger skipped: SNAPSHOT_LAMBDA_FUNCTION_NAME not configured")
+	default:
+		log.Printf("invoking snapshot lambda %s after %d new jobs", cfg.SnapshotLambda, runResult.JobsAddedToCache)
+		if err := trigger(ctx, cfg); err != nil {
+			log.Printf("snapshot trigger failed: %v", err)
+		} else {
+			log.Printf("snapshot lambda invoked successfully")
+		}
+	}
 }
 
 // to control knobs via query parameters
@@ -264,7 +276,7 @@ func errorResponse(status int, err error) (Response, error) {
 		"message": err.Error(),
 	}
 
-	return jsonResponse(status, payload), nil
+	return jsonResponse(status, payload), err
 }
 
 func main() {
