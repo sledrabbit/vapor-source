@@ -13,6 +13,54 @@ provider "aws" {
   region = var.aws_region
 }
 
+data "aws_caller_identity" "current" {}
+
+data "aws_partition" "current" {}
+
+resource "aws_sns_topic" "lambda_errors" {
+  name = "vapor-source-lambda-errors"
+}
+
+data "aws_iam_policy_document" "lambda_error_notifications" {
+  statement {
+    sid       = "AllowCloudWatchAlarmsToPublish"
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.lambda_errors.arn]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "AWS:SourceArn"
+      values = [
+        "arn:${data.aws_partition.current.partition}:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:*"
+      ]
+    }
+  }
+}
+
+resource "aws_sns_topic_policy" "lambda_errors" {
+  arn    = aws_sns_topic.lambda_errors.arn
+  policy = data.aws_iam_policy_document.lambda_error_notifications.json
+}
+
+resource "aws_sns_topic_subscription" "lambda_error_email" {
+  for_each = var.alert_email_addresses
+
+  topic_arn = aws_sns_topic.lambda_errors.arn
+  protocol  = "email"
+  endpoint  = each.value
+}
+
 resource "aws_s3_bucket" "job_id_cache" {
   bucket = var.job_ids_bucket_name
 }
@@ -118,7 +166,7 @@ resource "aws_s3_bucket_policy" "snapshots_cloudfront" {
         Principal = {
           AWS = aws_cloudfront_origin_access_identity.snapshots.iam_arn
         }
-        Action = ["s3:GetObject"]
+        Action   = ["s3:GetObject"]
         Resource = "${aws_s3_bucket.snapshots.arn}/*"
       }
     ]
@@ -257,10 +305,10 @@ resource "aws_lambda_function" "job_scraper" {
     variables = merge(
       var.scraper_environment_variables,
       {
-        DYNAMODB_TABLE_NAME = aws_dynamodb_table.jobs.name
-        JOB_IDS_BUCKET      = aws_s3_bucket.job_id_cache.bucket
-        JOB_IDS_S3_KEY      = var.job_ids_s3_key
-        SNAPSHOT_BUCKET     = aws_s3_bucket.snapshots.bucket
+        DYNAMODB_TABLE_NAME           = aws_dynamodb_table.jobs.name
+        JOB_IDS_BUCKET                = aws_s3_bucket.job_id_cache.bucket
+        JOB_IDS_S3_KEY                = var.job_ids_s3_key
+        SNAPSHOT_BUCKET               = aws_s3_bucket.snapshots.bucket
         SNAPSHOT_LAMBDA_FUNCTION_NAME = aws_lambda_function.job_snapshot.function_name
       }
     )
@@ -380,6 +428,42 @@ resource "aws_lambda_function" "job_snapshot" {
   depends_on = [aws_cloudwatch_log_group.job_snapshot]
 }
 
+resource "aws_cloudwatch_metric_alarm" "job_scraper_errors" {
+  alarm_name          = "${aws_lambda_function.job_scraper.function_name}-errors"
+  alarm_description   = "The scraper Lambda returned at least one error in five minutes."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.lambda_errors.arn]
+
+  dimensions = {
+    FunctionName = aws_lambda_function.job_scraper.function_name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "job_snapshot_errors" {
+  alarm_name          = "${aws_lambda_function.job_snapshot.function_name}-errors"
+  alarm_description   = "The snapshot Lambda returned at least one error in five minutes."
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.lambda_errors.arn]
+
+  dimensions = {
+    FunctionName = aws_lambda_function.job_snapshot.function_name
+  }
+}
+
 resource "aws_lambda_function_url" "job_snapshot" {
   function_name      = aws_lambda_function.job_snapshot.arn
   authorization_type = "NONE"
@@ -429,4 +513,9 @@ output "snapshot_lambda_function_url" {
 output "snapshot_distribution_domain" {
   description = "CloudFront domain serving snapshot JSONL files."
   value       = aws_cloudfront_distribution.snapshots.domain_name
+}
+
+output "lambda_error_sns_topic_arn" {
+  description = "SNS topic receiving Lambda error alarm notifications."
+  value       = aws_sns_topic.lambda_errors.arn
 }

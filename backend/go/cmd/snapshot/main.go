@@ -123,7 +123,7 @@ func errorResponse(status int, err error) (Response, error) {
 		"message": err.Error(),
 	}
 
-	return jsonResponse(status, payload), nil
+	return jsonResponse(status, payload), err
 }
 
 // determineDateRange returns the start/end date range using optional env overrides.

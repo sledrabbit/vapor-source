@@ -1,11 +1,25 @@
 package main
 
 import (
+	"errors"
+	"net/http"
 	"testing"
 	"time"
 
 	"gopher-source/config"
 )
+
+func TestErrorResponseReturnsLambdaError(t *testing.T) {
+	expected := errors.New("snapshot failed")
+	response, err := errorResponse(http.StatusInternalServerError, expected)
+
+	if !errors.Is(err, expected) {
+		t.Fatalf("expected Lambda error %v, got %v", expected, err)
+	}
+	if response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, response.StatusCode)
+	}
+}
 
 func TestDetermineDateRange_DefaultsToToday(t *testing.T) {
 	loc, err := time.LoadLocation("America/Los_Angeles")

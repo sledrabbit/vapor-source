@@ -45,6 +45,12 @@ variable "snapshot_lambda_zip_path" {
   default     = "../../../backend/go/bin/snapshot/lambda.zip"
 }
 
+variable "alert_email_addresses" {
+  description = "Email addresses subscribed to Lambda error notifications. Each address must confirm its SNS subscription."
+  type        = set(string)
+  default     = []
+}
+
 variable "scraper_environment_variables" {
   description = "Environment variables passed into the scraper Lambda."
   type        = map(string)
