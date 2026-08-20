@@ -13,7 +13,7 @@ import (
 )
 
 type Config struct {
-	MaxPages          int
+	MaxPages          int // 1 page = 1 apex api call = up to 100 jobs per call
 	BaseURL           string
 	RequestDelay      time.Duration
 	OpenAIAPIKey      string
