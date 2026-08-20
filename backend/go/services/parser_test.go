@@ -85,6 +85,9 @@ func TestParseWithStatsSuccess(t *testing.T) {
 	if enhanced.ParsedDescription != "parsed" || enhanced.Modality != "Remote" || enhanced.Description != "" {
 		t.Fatalf("expected job fields populated, got %+v", enhanced)
 	}
+	if client.sendCalls != 1 {
+		t.Fatalf("expected no retry for non-null YOE, got %d API calls", client.sendCalls)
+	}
 }
 
 func TestPopulateJobFromResponsePreservesKnownZeroAndUnknown(t *testing.T) {
@@ -101,7 +104,7 @@ func TestPopulateJobFromResponsePreservesKnownZeroAndUnknown(t *testing.T) {
 	}
 }
 
-func TestParseWithStatsRetriesNullYOEWhenDescriptionContainsCue(t *testing.T) {
+func TestParseWithStatsRetriesNullYOE(t *testing.T) {
 	fiveYears := 5
 	client := &fakeOpenAIClient{
 		sendResp: successfulChatCompletion(),
@@ -134,7 +137,7 @@ func TestParseWithStatsRetriesNullYOEWhenDescriptionContainsCue(t *testing.T) {
 	}
 }
 
-func TestParseWithStatsDoesNotRetryNullYOEWithoutCue(t *testing.T) {
+func TestParseWithStatsRetriesNullYOEWithoutExplicitCue(t *testing.T) {
 	client := &fakeOpenAIClient{
 		sendResp:     successfulChatCompletion(),
 		unmarshalRes: models.OpenAIJobParsingResponse{IsSoftwareEngineerRelated: true},
@@ -142,60 +145,21 @@ func TestParseWithStatsDoesNotRetryNullYOEWithoutCue(t *testing.T) {
 	parser := NewParserService(client)
 
 	job, ok := parser.ParseWithStats(context.Background(), &models.Job{
-		JobId:       "no-yoe-retry",
+		JobId:       "yoe-retry-confirm-null",
 		Title:       "Backend Engineer",
 		Description: "Build and operate backend services.",
 	})
 	if !ok || job == nil {
 		t.Fatalf("expected successful parse, got ok=%v job=%v", ok, job)
 	}
-	if client.sendCalls != 1 {
-		t.Fatalf("expected no YOE retry, got %d API calls", client.sendCalls)
+	if client.sendCalls != 2 {
+		t.Fatalf("expected one YOE retry, got %d API calls", client.sendCalls)
 	}
-}
-
-func TestContainsYOECue(t *testing.T) {
-	tests := []struct {
-		name   string
-		source string
-		want   bool
-	}{
-		{name: "numeric requirement", source: "Requires 3+ years of software engineering experience", want: true},
-		{name: "written range", source: "Three to five years of professional experience required", want: true},
-		{name: "ambiguous years mention gets adjudicated", source: "The company was founded 20 years ago", want: true},
-		{name: "no years", source: "Prior backend experience is preferred", want: false},
+	if job.MinYearsExperience != nil {
+		t.Fatalf("expected confirmed unknown YOE to remain nil, got %v", *job.MinYearsExperience)
 	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := containsYOECue(test.source); got != test.want {
-				t.Fatalf("containsYOECue(%q) = %v, want %v", test.source, got, test.want)
-			}
-		})
-	}
-}
-
-func TestShouldRetryYOEOnlyForExplicitEvidence(t *testing.T) {
-	tests := []struct {
-		name        string
-		title       string
-		description string
-		want        bool
-	}{
-		{name: "numeric requirement", title: "Backend Engineer", description: "Requires 4 years of experience", want: true},
-		{name: "explicit zero", title: "Backend Engineer", description: "No prior experience is required", want: true},
-		{name: "explicit zero alternate wording", title: "Backend Engineer", description: "Professional experience is not required", want: true},
-		{name: "senior title only", title: "Senior Backend Engineer", description: "Build backend services", want: false},
-		{name: "entry title only", title: "Entry-Level Developer", description: "Build product features", want: false},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			job := &models.Job{Title: test.title, Description: test.description}
-			if got := shouldRetryYOE(job); got != test.want {
-				t.Fatalf("shouldRetryYOE(%q, %q) = %v, want %v", test.title, test.description, got, test.want)
-			}
-		})
+	if !strings.Contains(client.messages[1], yoeRetryInstruction) {
+		t.Fatalf("expected focused retry instruction, got %q", client.messages[1])
 	}
 }
 

@@ -19,11 +19,14 @@ const jobExtractionDeveloperInstruction = `You extract structured data from job 
 
 For MinYearsExperience:
 - Re-scan the complete source for explicit experience requirements before answering.
-- When a required number or range is present, return the minimum required years (for example, 3 for "3+ years" and 2 for "2-4 years"). Do not return null in this case.
-- Return 0 only when the source explicitly states that no prior professional experience is required.
+- Evaluate every valid qualification path and return the lowest professional-experience minimum among them.
+- When a required number or range is present, return its lower bound (for example, 3 for "3+ years" and 2 for "2-4 years").
+- Return 0 when at least one valid qualification path requires no prior professional experience. This includes an explicit statement that no experience is required and complete requirements that accept education, coursework, an internship, or new-graduate qualifications without an additional professional-experience requirement.
+- Never return 0 for a role identified as Senior or Sr., Staff, Principal, or Director. If such a role has no explicit quantifiable minimum, return null. Seniority may rule out 0 but must never be converted into a positive fallback number.
+- Do not treat the absence of a number as 0 when the qualifications are missing or visibly truncated, or when the source requires unquantified experience such as "significant experience."
 - Distinguish required qualifications from experience that is only preferred or nice to have.
 - Never infer a number from title or seniority labels such as Entry-level, Junior, Mid-level, Senior, Staff, Principal, Lead, Director, New Grad, or Intern.
-- Return null after confirming that the source contains no explicit minimum-years requirement and does not explicitly state that no prior experience is required.
+- Return null only when the minimum cannot be determined from the available source.
 
 Follow the response schema exactly and do not add commentary.`
 

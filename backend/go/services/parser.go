@@ -6,17 +6,11 @@ import (
 	"gopher-source/models"
 	"gopher-source/utils"
 	"log"
-	"regexp"
 	"strings"
 	"time"
 )
 
-var (
-	yearsMentionPattern = regexp.MustCompile(`(?i)\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)(?:\s*(?:\+|plus)|\s*(?:[-–—]|to)\s*(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty))?\s*(?:years?|yrs?)\b`)
-	noExperiencePattern = regexp.MustCompile(`(?i)\b(?:(?:no|zero)\s+(?:(?:prior|previous|professional|industry|work)\s+)*experience\s+(?:is\s+)?(?:required|necessary|needed)|experience\s+is\s+not\s+(?:required|necessary|needed))\b`)
-)
-
-const yoeRetryInstruction = `The previous extraction returned null for MinYearsExperience, but the source contains possible explicit experience evidence. Re-scan the entire source and distinguish required from preferred qualifications. Return the lower bound of an explicit required number or range, or 0 only when the source explicitly says no prior professional experience is required. Do not infer a number from the title or seniority. Return null only if the detected phrase does not establish a minimum requirement. Return the complete structured response.`
+const yoeRetryInstruction = `The previous extraction returned null for MinYearsExperience. Re-scan the entire source and distinguish required from preferred qualifications. Evaluate every valid qualification path and return the lowest professional-experience minimum among them. Return the lower bound of an explicit required number or range. Return 0 when at least one valid path requires no prior professional experience, including complete requirements that accept education, coursework, an internship, or new-graduate qualifications without an additional professional-experience requirement. Never return 0 for a role identified as Senior or Sr., Staff, Principal, or Director; keep null if such a role has no explicit quantifiable minimum. Seniority may rule out 0 but must never be converted into a positive fallback number. Keep null when the minimum cannot be determined, including missing or visibly truncated qualifications and unquantified mandatory experience. Return the complete structured response.`
 
 type ParserClient interface {
 	ParseWithStats(ctx context.Context, job *models.Job) (*models.Job, bool)
@@ -38,7 +32,7 @@ func (p *parserClientImpl) ParseWithStats(ctx context.Context, job *models.Job) 
 		return nil, false
 	}
 
-	if res.MinYearsExperience == nil && shouldRetryYOE(job) {
+	if res.MinYearsExperience == nil {
 		retryRes, retryErr := p.parseMessage(ctx, yoeRetryInstruction+"\n\n"+message)
 		if retryErr != nil {
 			log.Printf("YOE retry failed for job %s: %v", job.JobId, retryErr)
@@ -76,18 +70,6 @@ func buildJobParsingMessage(job *models.Job) string {
 	message.WriteString("\n\nJob description:\n")
 	message.WriteString(job.Description)
 	return message.String()
-}
-
-func containsYOECue(source string) bool {
-	// Favor a single extra adjudication call over missing a less conventionally
-	// worded requirement. The retry prompt tells the model to keep null when the
-	// years mention is unrelated to job experience.
-	return yearsMentionPattern.MatchString(source)
-}
-
-func shouldRetryYOE(job *models.Job) bool {
-	source := job.Title + "\n" + job.Description
-	return containsYOECue(source) || noExperiencePattern.MatchString(source)
 }
 
 func populateJobFromResponse(job *models.Job, res models.OpenAIJobParsingResponse) {
