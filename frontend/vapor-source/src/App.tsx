@@ -3,6 +3,7 @@ import { JobsTable } from './components/JobsTable';
 import { useJobsSnapshot } from './hooks/useJobsSnapshot';
 import { InsightsSkeleton } from './components/InsightsSkeleton';
 import { ThemeToggle } from './components/ThemeToggle';
+import { GitHubButton } from './components/GitHubButton';
 
 const DEFAULT_PAGE_SIZE = 10;
 const SNAPSHOT_WINDOW_DAYS = 30;
@@ -23,7 +24,10 @@ function App() {
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--text-secondary)]">Vapor Source</p>
-            <ThemeToggle />
+            <div className="flex items-center">
+              <GitHubButton />
+              <ThemeToggle />
+            </div>
           </div>
           <div>
             <h1 className="text-3xl font-semibold text-[var(--text-primary)] sm:text-4xl">SWE Job Analytics</h1>
