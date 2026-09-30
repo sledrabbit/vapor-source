@@ -58,7 +58,8 @@ func (o *openaiClientImpl) SendMessage(ctx context.Context, message string) (ope
 				openai.DeveloperMessage(jobExtractionDeveloperInstruction),
 				openai.UserMessage(message),
 			},
-			Model: openai.ChatModelGPT4_1Nano,
+			Model:           "gpt-5.6-luna",
+			ReasoningEffort: "none",
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONSchema: &openai.ResponseFormatJSONSchemaParam{JSONSchema: schemaParam},
 			},
