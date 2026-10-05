@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const yoeRetryInstruction = `The previous extraction returned null for MinYearsExperience. Re-scan the entire source and distinguish required from preferred qualifications. Evaluate every valid qualification path and return the lowest professional-experience minimum among them. Return the lower bound of an explicit required number or range. Return 0 when at least one valid path requires no prior professional experience, including complete requirements that accept education, coursework, an internship, or new-graduate qualifications without an additional professional-experience requirement. Never return 0 for a role identified as Senior or Sr., Staff, Principal, or Director; keep null if such a role has no explicit quantifiable minimum. Seniority may rule out 0 but must never be converted into a positive fallback number. Keep null when the minimum cannot be determined, including missing or visibly truncated qualifications and unquantified mandatory experience. Return the complete structured response.`
+const yoeRetryInstruction = `The previous extraction returned null for MinYearsExperience. Re-check the full source using the developer instruction’s qualification-path and professional-experience rules. Keep null if the minimum remains undetermined. Return the complete structured response.`
 
 type ParserClient interface {
 	ParseWithStats(ctx context.Context, job *models.Job) (*models.Job, bool)
