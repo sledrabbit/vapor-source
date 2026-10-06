@@ -1,9 +1,16 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/openai/openai-go"
 )
 
 func TestOpenAIJobParsingSchemaAllowsNullMinYearsExperience(t *testing.T) {
@@ -70,4 +77,50 @@ func containsString(values []any, target string) bool {
 		}
 	}
 	return false
+}
+
+func TestExecuteWithRetryDoesNotRetryCreditFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		code      string
+		errorType string
+	}{
+		{name: "exhausted credits", code: "credit_balance_exhausted"},
+		{name: "legacy quota code", code: "insufficient_quota"},
+		{name: "quota type", code: "credit_balance_exhausted", errorType: "insufficient_quota"},
+		{name: "quota type without code", errorType: "insufficient_quota"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			apiErr := &openai.Error{
+				StatusCode: http.StatusTooManyRequests,
+				Code:       tc.code,
+				Type:       tc.errorType,
+				Request:    &http.Request{Method: http.MethodPost, URL: &url.URL{Scheme: "https", Host: "api.openai.com", Path: "/v1/chat/completions"}},
+				Response:   &http.Response{StatusCode: http.StatusTooManyRequests},
+			}
+			originalErr := fmt.Errorf("OpenAI API error: %w", apiErr)
+			calls := 0
+			_, err := (&openaiClientImpl{}).executeWithRetry(context.Background(), func() (openai.ChatCompletion, error) {
+				calls++
+				return openai.ChatCompletion{}, originalErr
+			})
+			if calls != 1 || err != originalErr || !errors.Is(err, apiErr) {
+				t.Fatalf("expected one SDK operation and original error, calls=%d err=%v", calls, err)
+			}
+		})
+	}
+}
+
+func TestExecuteWithRetryStillRetriesTemporaryRateLimit(t *testing.T) {
+	calls := 0
+	result, err := (&openaiClientImpl{}).executeWithRetry(context.Background(), func() (openai.ChatCompletion, error) {
+		calls++
+		if calls == 1 {
+			return openai.ChatCompletion{}, &openai.Error{StatusCode: http.StatusTooManyRequests, Code: "rate_limit_exceeded", Type: "rate_limit_error"}
+		}
+		return openai.ChatCompletion{ID: "success"}, nil
+	})
+	if err != nil || calls != 2 || result.ID != "success" {
+		t.Fatalf("expected rate limit retried successfully, calls=%d result=%v err=%v", calls, result, err)
+	}
 }

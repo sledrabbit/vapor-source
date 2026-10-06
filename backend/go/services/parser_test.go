@@ -16,6 +16,7 @@ type fakeOpenAIClient struct {
 	sendResp         openai.ChatCompletion
 	sendErr          error
 	sendCalls        int
+	sendErrors       []error
 	messages         []string
 	unmarshalRes     models.OpenAIJobParsingResponse
 	unmarshalResults []models.OpenAIJobParsingResponse
@@ -26,6 +27,9 @@ type fakeOpenAIClient struct {
 func (f *fakeOpenAIClient) SendMessage(ctx context.Context, message string) (openai.ChatCompletion, error) {
 	f.sendCalls++
 	f.messages = append(f.messages, message)
+	if f.sendCalls <= len(f.sendErrors) && f.sendErrors[f.sendCalls-1] != nil {
+		return openai.ChatCompletion{}, f.sendErrors[f.sendCalls-1]
+	}
 	if f.sendErr != nil {
 		return openai.ChatCompletion{}, f.sendErr
 	}
@@ -78,9 +82,9 @@ func TestParseWithStatsSuccess(t *testing.T) {
 		Title:       "Engineer",
 		Description: "Desc",
 	}
-	enhanced, ok := parser.ParseWithStats(context.Background(), &job)
-	if !ok || enhanced == nil {
-		t.Fatalf("expected success, got ok=%v job=%v", ok, enhanced)
+	enhanced, err := parser.ParseWithStats(context.Background(), &job)
+	if err != nil || enhanced == nil {
+		t.Fatalf("expected success, got err=%v job=%v", err, enhanced)
 	}
 	if enhanced.ParsedDescription != "parsed" || enhanced.Modality != "Remote" || enhanced.Description != "" {
 		t.Fatalf("expected job fields populated, got %+v", enhanced)
@@ -115,13 +119,13 @@ func TestParseWithStatsRetriesNullYOE(t *testing.T) {
 	}
 	parser := NewParserService(client)
 
-	job, ok := parser.ParseWithStats(context.Background(), &models.Job{
+	job, err := parser.ParseWithStats(context.Background(), &models.Job{
 		JobId:       "yoe-retry",
 		Title:       "Backend Engineer",
 		Description: "Required qualifications include 5+ years of software engineering experience.",
 	})
-	if !ok || job == nil {
-		t.Fatalf("expected successful parse, got ok=%v job=%v", ok, job)
+	if err != nil || job == nil {
+		t.Fatalf("expected successful parse, got err=%v job=%v", err, job)
 	}
 	if client.sendCalls != 2 {
 		t.Fatalf("expected one YOE retry, got %d API calls", client.sendCalls)
@@ -144,13 +148,13 @@ func TestParseWithStatsRetriesNullYOEWithoutExplicitCue(t *testing.T) {
 	}
 	parser := NewParserService(client)
 
-	job, ok := parser.ParseWithStats(context.Background(), &models.Job{
+	job, err := parser.ParseWithStats(context.Background(), &models.Job{
 		JobId:       "yoe-retry-confirm-null",
 		Title:       "Backend Engineer",
 		Description: "Build and operate backend services.",
 	})
-	if !ok || job == nil {
-		t.Fatalf("expected successful parse, got ok=%v job=%v", ok, job)
+	if err != nil || job == nil {
+		t.Fatalf("expected successful parse, got err=%v job=%v", err, job)
 	}
 	if client.sendCalls != 2 {
 		t.Fatalf("expected one YOE retry, got %d API calls", client.sendCalls)
@@ -188,8 +192,8 @@ func TestParseWithStatsHandlesSendError(t *testing.T) {
 	}
 	parser := NewParserService(client)
 
-	if job, ok := parser.ParseWithStats(context.Background(), &models.Job{JobId: "1"}); job != nil || ok {
-		t.Fatalf("expected failure when SendMessage errors, got job=%v ok=%v", job, ok)
+	if job, err := parser.ParseWithStats(context.Background(), &models.Job{JobId: "1"}); job != nil || !errors.Is(err, client.sendErr) {
+		t.Fatalf("expected failure when SendMessage errors, got job=%v err=%v", job, err)
 	}
 }
 
@@ -201,7 +205,7 @@ func TestParseWithStatsHandlesEmptyChoices(t *testing.T) {
 	}
 	parser := NewParserService(client)
 
-	if job, ok := parser.ParseWithStats(context.Background(), &models.Job{JobId: "2"}); job != nil || ok {
+	if job, err := parser.ParseWithStats(context.Background(), &models.Job{JobId: "2"}); job != nil || err == nil {
 		t.Fatalf("expected failure when no choices returned")
 	}
 }
@@ -223,7 +227,22 @@ func TestParseWithStatsHandlesUnmarshalError(t *testing.T) {
 	}
 	parser := NewParserService(client)
 
-	if job, ok := parser.ParseWithStats(context.Background(), &models.Job{JobId: "3"}); job != nil || ok {
+	if job, err := parser.ParseWithStats(context.Background(), &models.Job{JobId: "3"}); job != nil || err == nil {
 		t.Fatalf("expected failure when parsing response fails")
+	}
+}
+
+func TestParseWithStatsReturnsRetryErrorWithUsableJob(t *testing.T) {
+	retryErr := errors.New("retry API unavailable")
+	client := &fakeOpenAIClient{
+		sendResp: openai.ChatCompletion{Choices: []openai.ChatCompletionChoice{
+			{Message: openai.ChatCompletionMessage{Content: "response"}},
+		}},
+		sendErrors:   []error{nil, retryErr},
+		unmarshalRes: models.OpenAIJobParsingResponse{ParsedDescription: "first pass"},
+	}
+	job, err := NewParserService(client).ParseWithStats(context.Background(), &models.Job{JobId: "partial"})
+	if !errors.Is(err, retryErr) || job == nil || job.ParsedDescription != "first pass" {
+		t.Fatalf("expected first parse preserved with original retry error, job=%v err=%v", job, err)
 	}
 }

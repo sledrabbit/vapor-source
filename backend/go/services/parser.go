@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"gopher-source/models"
 	"gopher-source/utils"
-	"log"
 	"strings"
 	"time"
 )
@@ -13,7 +12,7 @@ import (
 const yoeRetryInstruction = `The previous extraction returned null for MinYearsExperience. Re-check the full source using the developer instruction’s qualification-path and professional-experience rules. Keep null if the minimum remains undetermined. Return the complete structured response.`
 
 type ParserClient interface {
-	ParseWithStats(ctx context.Context, job *models.Job) (*models.Job, bool)
+	ParseWithStats(ctx context.Context, job *models.Job) (*models.Job, error)
 }
 
 type parserClientImpl struct {
@@ -24,18 +23,18 @@ func NewParserService(openaiClient OpenAIClient) ParserClient {
 	return &parserClientImpl{openaiClient: openaiClient}
 }
 
-func (p *parserClientImpl) ParseWithStats(ctx context.Context, job *models.Job) (*models.Job, bool) {
+func (p *parserClientImpl) ParseWithStats(ctx context.Context, job *models.Job) (*models.Job, error) {
 	message := buildJobParsingMessage(job)
 	res, err := p.parseMessage(ctx, message)
 	if err != nil {
-		log.Printf("Error sending job %s to API: %v", job.JobId, err)
-		return nil, false
+		return nil, fmt.Errorf("parse job %s: %w", job.JobId, err)
 	}
 
+	var retryFailure error
 	if res.MinYearsExperience == nil {
 		retryRes, retryErr := p.parseMessage(ctx, yoeRetryInstruction+"\n\n"+message)
 		if retryErr != nil {
-			log.Printf("YOE retry failed for job %s: %v", job.JobId, retryErr)
+			retryFailure = fmt.Errorf("YOE retry for job %s: %w", job.JobId, retryErr)
 		} else if retryRes.MinYearsExperience != nil {
 			res.MinYearsExperience = retryRes.MinYearsExperience
 		}
@@ -43,7 +42,7 @@ func (p *parserClientImpl) ParseWithStats(ctx context.Context, job *models.Job) 
 
 	enhancedJob := *job
 	populateJobFromResponse(&enhancedJob, res)
-	return &enhancedJob, true
+	return &enhancedJob, retryFailure
 }
 
 func (p *parserClientImpl) parseMessage(ctx context.Context, message string) (models.OpenAIJobParsingResponse, error) {

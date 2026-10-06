@@ -84,12 +84,20 @@ func (o *openaiClientImpl) executeWithRetry(ctx context.Context, operation func(
 	maxRetries := 10
 	baseDelay := 1000 * time.Millisecond
 	maxDelay := 10 * time.Second
+	var lastErr error
 
 	for i := 0; i < maxRetries; i++ {
 		result, err := operation()
 		if err != nil {
+			lastErr = err
 			var apiErr *openai.Error
 			if errors.As(err, &apiErr) && apiErr.StatusCode == 429 {
+				if apiErr.Code == "credit_balance_exhausted" || apiErr.Code == "insufficient_quota" || apiErr.Type == "insufficient_quota" {
+					return openai.ChatCompletion{}, err
+				}
+				if i == maxRetries-1 {
+					break
+				}
 				// exponential backoff with full jitter
 				backoffDelay := time.Duration(float64(baseDelay) * math.Pow(2, float64(i)))
 				backoffDelay = min(backoffDelay, maxDelay)
@@ -102,7 +110,7 @@ func (o *openaiClientImpl) executeWithRetry(ctx context.Context, operation func(
 		}
 		return result, nil
 	}
-	return openai.ChatCompletion{}, fmt.Errorf("\t❌ Max retry attempts of %d reached. Operation failed", maxRetries)
+	return openai.ChatCompletion{}, fmt.Errorf("\t❌ Max retry attempts of %d reached: %w", maxRetries, lastErr)
 }
 
 func generateSchema[T any]() interface{} {

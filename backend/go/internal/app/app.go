@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -76,16 +77,18 @@ func Run(ctx context.Context, cfg *config.Config) (*RunResult, error) {
 
 	openaiService := services.NewOpenAIService()
 	parser := services.NewParserService(openaiService)
-	scraper := services.NewScraperWithKeyset(*cfg, true, keySet)
+	scraper := services.NewScraperWithKeyset(*cfg, true, maps.Clone(keySet))
 
 	jobsChan := make(chan models.Job)
 	var processingWg sync.WaitGroup
 	processingWg.Add(1)
 	stats := &models.JobStats{}
 
+	var storedIDs map[string]bool
+	var processingErr error
 	go func() {
 		defer processingWg.Done()
-		processAndSendJobs(ctx, jobsChan, stats, *cfg, parser, dynamoService)
+		storedIDs, processingErr = processAndSendJobs(ctx, jobsChan, stats, *cfg, parser, dynamoService)
 	}()
 
 	// scrape
@@ -93,20 +96,30 @@ func Run(ctx context.Context, cfg *config.Config) (*RunResult, error) {
 	scrapeErr := scraper.ScrapeJobs(ctx, cfg.DefaultQuery, jobsChan, stats)
 	processingWg.Wait()
 
+	result.Stats = stats.Snapshot()
+	result.ExecutionTime = time.Since(startTime)
+	var runErr error
+	if scrapeErr != nil {
+		runErr = fmt.Errorf("scrape jobs: %w", scrapeErr)
+	}
+	runErr = errors.Join(runErr, processingErr)
+
 	if cfg.UseJobIDFile {
-		keySet = scraper.GetProcessedIDs()
+		for id := range storedIDs {
+			keySet[id] = true
+		}
 		if cfg.ApiDryRun == "true" {
 			result.JobCacheFinalSize = keySetInitialSize
 			result.JobsAddedToCache = 0
 			utils.Debug("API_DRY_RUN enabled; skipping job ID cache upload")
 		} else {
 			if err := dynamoService.WriteJobIdsToFile(cfg.Filename, keySet); err != nil {
-				return nil, fmt.Errorf("write job ids: %w", err)
+				return result, errors.Join(runErr, fmt.Errorf("write job ids: %w", err))
 			}
 			if cfg.UseS3JobIDFile && s3Service != nil {
 				utils.Debug(fmt.Sprintf("Uploading %d job IDs to s3://%s/%s", len(keySet), cfg.JobIDsBucket, cfg.JobIDsS3Key))
 				if err := uploadJobIDCache(ctx, s3Service, cfg.JobIDsBucket, cfg.JobIDsS3Key, cfg.Filename); err != nil {
-					return nil, err
+					return result, errors.Join(runErr, err)
 				}
 				result.JobCacheS3Bucket = cfg.JobIDsBucket
 				result.JobCacheS3Key = cfg.JobIDsS3Key
@@ -125,16 +138,22 @@ func Run(ctx context.Context, cfg *config.Config) (*RunResult, error) {
 	result.ExecutionTime = executionTime
 	result.Stats = stats.Snapshot()
 
-	if scrapeErr != nil {
-		return result, fmt.Errorf("scrape jobs: %w", scrapeErr)
-	}
-	return result, nil
+	return result, runErr
 }
 
 func processAndSendJobs(ctx context.Context, jobsChan <-chan models.Job, stats *models.JobStats, cfg config.Config,
-	parser services.ParserClient, dynamoService services.DynamoDBClient) {
+	parser services.ParserClient, dynamoService services.DynamoDBClient) (map[string]bool, error) {
 	sem := make(chan struct{}, cfg.MaxConcurrency)
 	var wg sync.WaitGroup
+	var resultMu sync.Mutex
+	storedIDs := make(map[string]bool)
+	var jobErrors []error
+	recordError := func(err error) {
+		log.Printf("Job processing failed: %v", err)
+		resultMu.Lock()
+		defer resultMu.Unlock()
+		jobErrors = append(jobErrors, err)
+	}
 
 	for job := range jobsChan {
 		wg.Add(1)
@@ -150,29 +169,33 @@ func processAndSendJobs(ctx context.Context, jobsChan <-chan models.Job, stats *
 				return
 			}
 
-			enhancedJob, success := parser.ParseWithStats(ctx, &job)
+			enhancedJob, err := parser.ParseWithStats(ctx, &job)
+			if err != nil {
+				recordError(fmt.Errorf("process job %s: %w", job.JobId, err))
+			}
 			if enhancedJob == nil {
+				if err == nil {
+					recordError(fmt.Errorf("parse job %s: parser returned no job", job.JobId))
+				}
 				atomic.AddInt64(&stats.FailedJobs, 1)
 				return
 			}
 
-			if success {
-				atomic.AddInt64(&stats.SuccessfulJobs, 1)
-			} else {
-				atomic.AddInt64(&stats.FailedJobs, 1)
-			}
+			atomic.AddInt64(&stats.SuccessfulJobs, 1)
 			if !enhancedJob.IsSoftwareEngineerRelated {
 				atomic.AddInt64(&stats.UnrelatedJobs, 1)
 			}
 			if err := dynamoService.PutJob(ctx, enhancedJob); err != nil {
-				log.Printf("Failed to put job to DynamoDB: %v", err)
+				recordError(fmt.Errorf("store job %s: %w", job.JobId, err))
+				return
 			}
-			if cfg.ApiDryRun == "true" {
-				mockPost(*enhancedJob)
-			}
+			resultMu.Lock()
+			storedIDs[job.JobId] = true
+			resultMu.Unlock()
 		}(job)
 	}
 	wg.Wait()
+	return storedIDs, errors.Join(jobErrors...)
 }
 
 func mockPost(job models.Job) {
