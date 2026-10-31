@@ -447,7 +447,8 @@ export function YoeDistributionChart({ buckets, height }: YoeDistributionChartPr
 export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
   const isCompact = useCompactScreen();
   const { beeswarmPalette, baseBoxLayout, hoverLabelFontColor, hoverLabelBgColor } = useChartVisuals();
-  const { positions, labels, colorByLabel } = useMemo(() => {
+  const { visibleSamples, positions, labels, colorByLabel, counts } = useMemo(() => {
+    const maxDotsPerValue = 5;
     const uniqueLabels = Array.from(new Set(samples.map((sample) => sample.label)));
     const labelIndex = new Map(uniqueLabels.map((label, idx) => [label, idx]));
     const colorMap = new Map<string, string>();
@@ -466,22 +467,33 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
 
     const assignedCounts = new Map<string, Map<number, number>>();
 
-    const positions = samples.map((sample) => {
+    const visibleSamples = samples.filter((sample) => {
+      const labelAssigned = assignedCounts.get(sample.label) ?? new Map<number, number>();
+      const assigned = labelAssigned.get(sample.value) ?? 0;
+      if (assigned >= maxDotsPerValue) return false;
+      labelAssigned.set(sample.value, assigned + 1);
+      assignedCounts.set(sample.label, labelAssigned);
+      return true;
+    });
+
+    const visibleCounts = new Map<string, Map<number, number>>();
+    const positions = visibleSamples.map((sample) => {
       const label = sample.label;
       const value = Number(sample.value);
       const base = labelIndex.get(label) ?? 0;
-      const total = totalCounts.get(label)?.get(value) ?? 1;
-      const labelAssigned = assignedCounts.get(label) ?? new Map<number, number>();
+      const total = Math.min(totalCounts.get(label)?.get(value) ?? 1, maxDotsPerValue);
+      const labelAssigned = visibleCounts.get(label) ?? new Map<number, number>();
       const assigned = labelAssigned.get(value) ?? 0;
       labelAssigned.set(value, assigned + 1);
-      assignedCounts.set(label, labelAssigned);
+      visibleCounts.set(label, labelAssigned);
 
       const spacing = 0.18;
       const offset = (assigned - (total - 1) / 2) * spacing;
       return base + offset;
     });
 
-    return { positions, labels: uniqueLabels, colorByLabel: colorMap };
+    const counts = visibleSamples.map((sample) => totalCounts.get(sample.label)?.get(sample.value) ?? 1);
+    return { visibleSamples, positions, labels: uniqueLabels, colorByLabel: colorMap, counts };
   }, [beeswarmPalette, samples]);
 
   const plotData = useMemo<Data[]>(
@@ -490,18 +502,20 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
         type: 'scatter' as const,
         mode: 'markers' as const,
         x: positions,
-        y: samples.map((sample) => sample.value),
-        text: samples.map((sample) => sample.label),
+        y: visibleSamples.map((sample) => sample.value),
+        text: visibleSamples.map((sample, index) =>
+          `<b>${sample.label}</b><br>Min YOE: ${sample.value}<br>Listings at this value: ${counts[index]}`,
+        ),
         marker: {
           size: 7,
           opacity: 0.9,
-          color: samples.map((sample) => colorByLabel.get(sample.label) ?? beeswarmPalette[0]),
+          color: visibleSamples.map((sample) => colorByLabel.get(sample.label) ?? beeswarmPalette[0]),
         },
-        hovertemplate: '<b>%{text}</b><br>Min YOE: %{y}<extra></extra>',
+        hovertemplate: '%{text}<extra></extra>',
         hoverlabel: { font: { color: hoverLabelFontColor }, bgcolor: hoverLabelBgColor },
       },
     ],
-    [beeswarmPalette, colorByLabel, hoverLabelBgColor, hoverLabelFontColor, positions, samples],
+    [beeswarmPalette, colorByLabel, counts, hoverLabelBgColor, hoverLabelFontColor, positions, visibleSamples],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -529,6 +543,7 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
     <div className="surface-panel rounded-2xl p-4">
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">YOE Beeswarm By Language</h3>
+        <p className="text-xs text-[var(--text-muted)]">Shows 5 dots max. Hover for full count.</p>
       </div>
       {samples.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
