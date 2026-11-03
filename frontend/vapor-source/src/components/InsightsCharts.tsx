@@ -447,8 +447,8 @@ export function YoeDistributionChart({ buckets, height }: YoeDistributionChartPr
 export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
   const isCompact = useCompactScreen();
   const { beeswarmPalette, baseBoxLayout, hoverLabelFontColor, hoverLabelBgColor } = useChartVisuals();
-  const { visibleSamples, positions, labels, colorByLabel, counts } = useMemo(() => {
-    const maxDotsPerValue = 5;
+  const { visibleSamples, positions, labels, colorByLabel, counts, shares, opacities } = useMemo(() => {
+    const maxDotsPerValue = 10;
     const uniqueLabels = Array.from(new Set(samples.map((sample) => sample.label)));
     const labelIndex = new Map(uniqueLabels.map((label, idx) => [label, idx]));
     const colorMap = new Map<string, string>();
@@ -457,43 +457,40 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
     });
 
     const totalCounts = new Map<string, Map<number, number>>();
+    const languageTotals = new Map<string, number>();
     for (const sample of samples) {
       const label = sample.label;
       const value = Number(sample.value);
       const labelMap = totalCounts.get(label) ?? new Map<number, number>();
       labelMap.set(value, (labelMap.get(value) ?? 0) + 1);
       totalCounts.set(label, labelMap);
+      languageTotals.set(label, (languageTotals.get(label) ?? 0) + 1);
     }
 
-    const assignedCounts = new Map<string, Map<number, number>>();
-
-    const visibleSamples = samples.filter((sample) => {
-      const labelAssigned = assignedCounts.get(sample.label) ?? new Map<number, number>();
-      const assigned = labelAssigned.get(sample.value) ?? 0;
-      if (assigned >= maxDotsPerValue) return false;
-      labelAssigned.set(sample.value, assigned + 1);
-      assignedCounts.set(sample.label, labelAssigned);
-      return true;
-    });
-
-    const visibleCounts = new Map<string, Map<number, number>>();
-    const positions = visibleSamples.map((sample) => {
-      const label = sample.label;
-      const value = Number(sample.value);
+    const visibleSamples: LanguageSample[] = [];
+    const positions: number[] = [];
+    const counts: number[] = [];
+    const shares: string[] = [];
+    const opacities: number[] = [];
+    for (const [label, valueCounts] of totalCounts) {
+      const languageTotal = languageTotals.get(label) ?? 1;
       const base = labelIndex.get(label) ?? 0;
-      const total = Math.min(totalCounts.get(label)?.get(value) ?? 1, maxDotsPerValue);
-      const labelAssigned = visibleCounts.get(label) ?? new Map<number, number>();
-      const assigned = labelAssigned.get(value) ?? 0;
-      labelAssigned.set(value, assigned + 1);
-      visibleCounts.set(label, labelAssigned);
-
-      const spacing = 0.18;
-      const offset = (assigned - (total - 1) / 2) * spacing;
-      return base + offset;
-    });
-
-    const counts = visibleSamples.map((sample) => totalCounts.get(sample.label)?.get(sample.value) ?? 1);
-    return { visibleSamples, positions, labels: uniqueLabels, colorByLabel: colorMap, counts };
+      for (const [value, count] of valueCounts) {
+        const share = count / languageTotal;
+        const scaledDots = maxDotsPerValue * share;
+        const fullDots = Math.floor(scaledDots);
+        const dots = Math.ceil(scaledDots);
+        const spacing = dots > 1 ? Math.min(0.18, 0.8 / (dots - 1)) : 0;
+        for (let index = 0; index < dots; index += 1) {
+          visibleSamples.push({ label, value });
+          positions.push(base + (index - (dots - 1) / 2) * spacing);
+          counts.push(count);
+          shares.push((100 * share).toFixed(1));
+          opacities.push(index < fullDots ? 0.9 : Math.max(0.15, 0.9 * (scaledDots - fullDots)));
+        }
+      }
+    }
+    return { visibleSamples, positions, labels: uniqueLabels, colorByLabel: colorMap, counts, shares, opacities };
   }, [beeswarmPalette, samples]);
 
   const plotData = useMemo<Data[]>(
@@ -504,18 +501,18 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
         x: positions,
         y: visibleSamples.map((sample) => sample.value),
         text: visibleSamples.map((sample, index) =>
-          `<b>${sample.label}</b><br>Min YOE: ${sample.value}<br>Listings at this value: ${counts[index]}`,
+          `<b>${sample.label}</b><br>Min YOE: ${sample.value}<br>Listings at this value: ${counts[index]} (${shares[index]}% of language)`,
         ),
         marker: {
           size: 7,
-          opacity: 0.9,
+          opacity: opacities,
           color: visibleSamples.map((sample) => colorByLabel.get(sample.label) ?? beeswarmPalette[0]),
         },
         hovertemplate: '%{text}<extra></extra>',
         hoverlabel: { font: { color: hoverLabelFontColor }, bgcolor: hoverLabelBgColor },
       },
     ],
-    [beeswarmPalette, colorByLabel, counts, hoverLabelBgColor, hoverLabelFontColor, positions, visibleSamples],
+    [beeswarmPalette, colorByLabel, counts, hoverLabelBgColor, hoverLabelFontColor, opacities, positions, shares, visibleSamples],
   );
 
   const layout = useMemo<Partial<Layout>>(
@@ -543,7 +540,6 @@ export function LanguageBeeswarmPlot({ samples }: BeeswarmPlotProps) {
     <div className="surface-panel rounded-2xl p-4">
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-[var(--text-primary)]">YOE Beeswarm By Language</h3>
-        <p className="text-xs text-[var(--text-muted)]">Shows 5 dots max. Hover for full count.</p>
       </div>
       {samples.length > 0 ? (
         <Plot data={plotData} layout={layout} config={basePlotConfig} style={{ width: '100%', height: `${chartHeight}px` }} />
