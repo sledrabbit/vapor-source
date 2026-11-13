@@ -337,17 +337,6 @@ resource "aws_lambda_permission" "job_scraper_schedule" {
   source_arn    = aws_cloudwatch_event_rule.job_scraper_schedule.arn
 }
 
-resource "aws_lambda_function_url" "job_scraper" {
-  function_name      = aws_lambda_function.job_scraper.arn
-  authorization_type = "NONE"
-
-  cors {
-    allow_origins = ["*"]
-    allow_methods = ["*"]
-    allow_headers = ["*"]
-  }
-}
-
 resource "aws_iam_role" "job_snapshot" {
   name               = "${var.snapshot_lambda_function_name}-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
@@ -464,17 +453,6 @@ resource "aws_cloudwatch_metric_alarm" "job_snapshot_errors" {
   }
 }
 
-resource "aws_lambda_function_url" "job_snapshot" {
-  function_name      = aws_lambda_function.job_snapshot.arn
-  authorization_type = "NONE"
-
-  cors {
-    allow_origins = ["*"]
-    allow_methods = ["*"]
-    allow_headers = ["*"]
-  }
-}
-
 output "lambda_function_arn" {
   description = "ARN of the deployed Go job scraper Lambda."
   value       = aws_lambda_function.job_scraper.arn
@@ -483,11 +461,6 @@ output "lambda_function_arn" {
 output "dynamodb_table_name" {
   description = "Name of the DynamoDB table used by the Lambda."
   value       = aws_dynamodb_table.jobs.name
-}
-
-output "lambda_function_url" {
-  description = "Public Function URL endpoint for the Lambda."
-  value       = aws_lambda_function_url.job_scraper.function_url
 }
 
 output "job_ids_bucket_name" {
@@ -503,11 +476,6 @@ output "snapshot_bucket_name" {
 output "snapshot_lambda_function_arn" {
   description = "ARN of the snapshot Lambda function."
   value       = aws_lambda_function.job_snapshot.arn
-}
-
-output "snapshot_lambda_function_url" {
-  description = "Function URL endpoint for triggering the snapshot Lambda."
-  value       = aws_lambda_function_url.job_snapshot.function_url
 }
 
 output "snapshot_distribution_domain" {
